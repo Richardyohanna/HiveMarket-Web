@@ -51,6 +51,9 @@ export default function Hero() {
           w-[780px]
           overflow-hidden
           rounded-full
+          lg:block
+          sm:hidden
+          hidden
         "
       >
         <img
@@ -462,11 +465,14 @@ export default function Hero() {
         <div
           className="
             relative
-            flex
             min-h-[420px]
             items-center
             justify-center
             lg:min-h-[500px]
+            lg:flex
+            md:flex
+            sm:hidden
+            hidden
           "
         >
           {/* =====================================================

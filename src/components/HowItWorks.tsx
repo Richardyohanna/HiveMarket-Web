@@ -382,8 +382,9 @@ export default function HowItWorks() {
             className="
               relative
               mx-auto
-              h-[450px]
+              h-[300px]
               w-full
+              md:h-[450px]
             "
           >
             {/* =================================================
@@ -447,6 +448,7 @@ export default function HowItWorks() {
                 bg-[#e8f5e9]
                 md:h-80
                 md:w-80
+                
               "
             />
 
@@ -543,7 +545,7 @@ export default function HowItWorks() {
                   : {
                       y: {
                         duration: 5,
-                        repeat: 2,
+                        repeat: 1,
                         ease: 'easeInOut',
                       },
                       opacity: {

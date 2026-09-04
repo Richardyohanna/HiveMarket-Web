@@ -77,7 +77,7 @@ export default function DownloadCta() {
                   }
                 : {
                     duration: 7,
-                    repeat: Infinity,
+                    repeat: 2,
                     ease: 'easeInOut',
                   }
             }
@@ -106,7 +106,7 @@ export default function DownloadCta() {
               }}
               transition={{
                 duration: 9,
-                repeat: Infinity,
+                repeat: 2,
                 ease: 'easeInOut',
               }}
               className="
@@ -185,7 +185,7 @@ export default function DownloadCta() {
                       },
                       y: {
                         duration: 4.5,
-                        repeat: Infinity,
+                        repeat: 2,
                         ease: 'easeInOut',
                       },
                     }

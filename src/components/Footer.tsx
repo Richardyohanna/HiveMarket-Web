@@ -32,7 +32,7 @@ export default function Footer() {
     <footer className="relative overflow-hidden border-t border-[#e7ece8] bg-[#ffffff]">
 
       {/* Decorative glow */}
-      <motion.div
+      {/* <motion.div
         aria-hidden="true"
         className="
           pointer-events-none
@@ -59,7 +59,7 @@ export default function Footer() {
           repeat: Infinity,
           ease: 'easeInOut',
         }}
-      />
+      /> */}
 
       <div className="relative mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
 
