@@ -1,6 +1,7 @@
 import { Menu, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
+import logo from "../assets/favicon.png";
 
 const navItems = [
   { label: 'Home', href: '#home' },
@@ -56,7 +57,7 @@ export default function Navbar() {
         <motion.a
           href="#home"
           onClick={closeMenu}
-          className="flex items-center gap-2"
+          className="flex items-center"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
         >
@@ -68,9 +69,13 @@ export default function Navbar() {
               delay: 0.1,
               ease: [0.22, 1, 0.36, 1],
             }}
-            className="flex h-8 w-8 items-center justify-center rounded-[9px] bg-[#008100] text-sm font-extrabold text-white shadow-sm"
+            className="flex h-12 w-12 items-center justify-center "
           >
-            H
+            <img
+              src={logo}
+              alt="HiveMarket Logo"
+              className="h-full w-full object-cover object-center"
+            />
           </motion.div>
 
           <motion.span
