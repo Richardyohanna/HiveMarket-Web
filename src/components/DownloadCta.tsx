@@ -343,7 +343,7 @@ export default function DownloadCta() {
               ================================================== */}
 
               <motion.a
-                href="#"
+                href="/hivemarket.apk"
                 whileHover={
                   shouldReduceMotion
                     ? undefined
@@ -383,6 +383,8 @@ export default function DownloadCta() {
                   text-[#008100]
                   shadow-sm
                 "
+                data-magnetic
+                data-magnetic-strength="0.08"
               >
                 {/* Shine */}
 
@@ -469,6 +471,8 @@ export default function DownloadCta() {
                   duration-200
                   hover:bg-white/90
                 "
+                data-magnetic
+                data-magnetic-strength="0.08"
               >
                 <img
                   src={iosIcon}

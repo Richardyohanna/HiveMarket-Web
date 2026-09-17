@@ -1,6 +1,6 @@
 import { Menu, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { type MouseEvent, useEffect, useState } from 'react';
 import logo from "../assets/favicon.png";
 
 const navItems = [
@@ -14,6 +14,7 @@ const navItems = [
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [activeSection, setActiveSection] = useState('home');
 
   useEffect(() => {
     const handleScroll = () => {
@@ -30,7 +31,90 @@ export default function Navbar() {
     };
   }, []);
 
+  useEffect(() => {
+    const sections = navItems
+      .map((item) => document.querySelector<HTMLElement>(item.href))
+      .filter((section): section is HTMLElement => Boolean(section));
+
+    if (!sections.length) return;
+
+    const updateEdgeSections = () => {
+      if (window.scrollY <= 8) {
+        setActiveSection('home');
+      } else if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 8) {
+        setActiveSection('faq');
+      }
+    };
+
+    const syncHashSection = () => {
+      const hashSection = window.location.hash.slice(1);
+      if (sections.some((section) => section.id === hashSection)) {
+        setActiveSection(hashSection);
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      () => {
+        const visibleSections = sections
+          .map((section) => ({
+            section,
+            bounds: section.getBoundingClientRect(),
+          }))
+          .filter(
+            ({ bounds }) =>
+              bounds.top <= window.innerHeight * 0.55 &&
+              bounds.bottom > 64,
+          )
+          .sort(
+            (first, second) => first.bounds.top - second.bounds.top,
+          );
+
+        if (visibleSections[visibleSections.length - 1]) {
+          setActiveSection(visibleSections[visibleSections.length - 1].section.id);
+        }
+
+        updateEdgeSections();
+      },
+      {
+        rootMargin: '-64px 0px -45% 0px',
+        threshold: [0, 0.2, 0.5],
+      },
+    );
+
+    sections.forEach((section) => observer.observe(section));
+    syncHashSection();
+    updateEdgeSections();
+    window.addEventListener('scroll', updateEdgeSections, { passive: true });
+    window.addEventListener('hashchange', syncHashSection);
+    window.addEventListener('popstate', syncHashSection);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('scroll', updateEdgeSections);
+      window.removeEventListener('hashchange', syncHashSection);
+      window.removeEventListener('popstate', syncHashSection);
+    };
+  }, []);
+
   const closeMenu = () => setIsOpen(false);
+  const handleNavigation = (event: MouseEvent<HTMLAnchorElement>, href: string) => {
+    event.preventDefault();
+    setActiveSection(href.slice(1));
+    closeMenu();
+
+    window.history.pushState(null, '', href);
+
+    const scrollToSection = () => {
+      document.querySelector<HTMLElement>(href)?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+          ? 'auto'
+          : 'smooth',
+        block: 'start',
+      });
+    };
+
+    window.setTimeout(scrollToSection, window.matchMedia('(max-width: 767px)').matches ? 320 : 0);
+  };
 
   return (
     <motion.header
@@ -56,7 +140,7 @@ export default function Navbar() {
         {/* Logo */}
         <motion.a
           href="#home"
-          onClick={closeMenu}
+          onClick={(event) => handleNavigation(event, '#home')}
           className="flex items-center"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
@@ -98,6 +182,7 @@ export default function Navbar() {
             <motion.a
               key={item.label}
               href={item.href}
+              onClick={(event) => handleNavigation(event, item.href)}
               initial={{ y: -8, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{
@@ -106,7 +191,10 @@ export default function Navbar() {
                 ease: [0.22, 1, 0.36, 1],
               }}
               whileHover={{ y: -1 }}
-              className="group relative py-2 text-[13px] font-medium text-gray-700 transition-colors duration-200 hover:text-[#008100]"
+              aria-current={activeSection === item.href.slice(1) ? 'page' : undefined}
+              className={`group relative py-2 text-[13px] font-medium transition-colors duration-200 hover:text-[#008100] ${
+                activeSection === item.href.slice(1) ? 'text-[#008100]' : 'text-gray-700'
+              }`}
             >
               {item.label}
 
@@ -117,7 +205,7 @@ export default function Navbar() {
                   bottom-0
                   left-0
                   h-[2px]
-                  w-0
+                  ${activeSection === item.href.slice(1) ? 'w-full' : 'w-0'}
                   rounded-full
                   bg-[#008100]
                   transition-all
@@ -209,7 +297,7 @@ export default function Navbar() {
                 <motion.a
                   key={item.label}
                   href={item.href}
-                  onClick={closeMenu}
+                  onClick={(event) => handleNavigation(event, item.href)}
                   initial={{ x: -15, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
                   exit={{ x: -10, opacity: 0 }}
@@ -219,7 +307,8 @@ export default function Navbar() {
                     ease: [0.22, 1, 0.36, 1],
                   }}
                   whileTap={{ scale: 0.98 }}
-                  className="
+                  aria-current={activeSection === item.href.slice(1) ? 'page' : undefined}
+                  className={`
                     border-b
                     border-gray-100
                     py-4
@@ -230,7 +319,8 @@ export default function Navbar() {
                     duration-200
                     last:border-0
                     hover:text-[#008100]
-                  "
+                    ${activeSection === item.href.slice(1) ? 'text-[#008100]' : 'text-gray-700'}
+                  `}
                 >
                   {item.label}
                 </motion.a>

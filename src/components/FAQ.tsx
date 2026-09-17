@@ -52,7 +52,7 @@ export default function FAQ() {
   return (
     <section
       id="faq"
-      className="relative overflow-hidden bg-white py-20 sm:py-24"
+      className="relative scroll-mt-20 overflow-hidden bg-white py-20 sm:py-24 md:scroll-mt-16"
     >
       {/* Decorative background */}
       <motion.div
@@ -197,6 +197,7 @@ export default function FAQ() {
                       : 'border-gray-200 bg-white shadow-[0_5px_20px_rgba(0,0,0,0.02)]'
                   }
                 `}
+                data-interactive
               >
                 {/* Active accent */}
                 <motion.div

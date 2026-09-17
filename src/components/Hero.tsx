@@ -12,7 +12,7 @@ export default function Hero() {
   return (
     <section
       id="home"
-      className="relative overflow-hidden bg-white"
+      className="relative scroll-mt-20 overflow-hidden bg-white md:scroll-mt-16"
     >
       {/* =========================================================
           Decorative Background
@@ -277,7 +277,7 @@ export default function Hero() {
             {/* Android */}
 
             <motion.a
-              href="#download"
+              href="/hivemarket.apk"
               whileHover={
                 shouldReduceMotion
                   ? undefined
@@ -316,6 +316,10 @@ export default function Hero() {
                 duration-200
                 hover:bg-[#006d24]
               "
+              data-magnetic
+              data-magnetic-strength="0.1"
+
+            
             >
               <img
                 src={androidIcon}
@@ -369,6 +373,8 @@ export default function Hero() {
                 hover:border-[#008100]
                 hover:text-[#008100]
               "
+              data-magnetic
+              data-magnetic-strength="0.08"
             >
               <img
                 src={iosIcon}

@@ -28,7 +28,7 @@ export default function HowItWorks() {
   return (
     <section
       id="features"
-      className="relative overflow-hidden bg-white py-20 sm:py-24"
+      className="relative scroll-mt-20 overflow-hidden bg-white py-20 sm:py-24 md:scroll-mt-16"
     >
       {/* =====================================================
           Decorative Background Elements

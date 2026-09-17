@@ -39,7 +39,7 @@ export default function About() {
   return (
     <section
       id="about"
-      className="relative overflow-hidden bg-[#ffffff] py-20 sm:py-24"
+      className="relative scroll-mt-20 overflow-hidden bg-[#ffffff] py-20 sm:py-24 md:scroll-mt-16"
     >
       {/* =====================================================
           Decorative Background
@@ -302,6 +302,7 @@ export default function About() {
                   hover:border-[#cce5cf]
                   hover:shadow-[0_18px_40px_rgba(0,0,0,0.07)]
                 "
+                data-interactive
               >
                 {/* =================================================
                     Icon

@@ -28,6 +28,7 @@ body {
 
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
 * {
@@ -43,6 +44,11 @@ button {
   cursor: pointer;
 }
 
+button,
+a {
+  min-height: 44px;
+}
+
 a {
   text-decoration: none;
   color: inherit;
@@ -51,4 +57,78 @@ a {
 img {
   max-width: 100%;
   display: block;
+}
+
+:focus-visible {
+  outline: 3px solid var(--hive-primary);
+  outline-offset: 3px;
+}
+
+.hive-cursor,
+.hive-cursor-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 100;
+  pointer-events: none;
+  border-radius: 999px;
+  opacity: 0;
+  will-change: transform;
+}
+
+.hive-cursor {
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  background: var(--hive-primary);
+  box-shadow: 0 0 0 5px rgb(0 129 0 / 10%);
+  transition: opacity 180ms ease;
+}
+
+.hive-cursor-ring {
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  border: 1px solid rgb(0 129 0 / 45%);
+  opacity: 0.7;
+  transition: opacity 180ms ease, width 220ms ease, height 220ms ease, margin 220ms ease, background-color 220ms ease;
+}
+
+.hive-cursor-ring.is-hovering {
+  width: 42px;
+  height: 42px;
+  margin: -21px 0 0 -21px;
+  background: rgb(0 129 0 / 8%);
+  opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hive-cursor,
+  .hive-cursor-ring {
+    opacity: 1;
+  }
+
+  [data-magnetic] {
+    transition: transform 180ms ease;
+    will-change: transform;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .hive-cursor,
+  .hive-cursor-ring {
+    display: none;
+  }
 }
