@@ -122,7 +122,7 @@ function SharePage({ route }: { route: { type: string; id: string | null } }) {
         </div>
       )}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 24 }}>
-        <a href={`${WEB_BASE_URL}/${route.type === 'product' ? 'product' : route.type === 'Shop' ? 'Shop' : 'profile'}/${route.id}`} style={{ background: '#008100', color: 'white', padding: '12px 18px', borderRadius: 999, textDecoration: 'none', fontWeight: 700 }}>Open in app</a>
+        <a href="/hivemarket.apk" style={{ background: '#008100', color: 'white', padding: '12px 18px', borderRadius: 999, textDecoration: 'none', fontWeight: 700 }}>Download App</a>
         <a href="/" style={{ background: '#f2f2f2', color: '#111', padding: '12px 18px', borderRadius: 999, textDecoration: 'none', fontWeight: 700 }}>Back to HiveMarket</a>
       </div>
     </div>
