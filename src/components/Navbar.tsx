@@ -241,7 +241,7 @@ export default function Navbar() {
             <a
               href="/account-deletion"
               onClick={goToDeletion}
-              className="text-[13px] font-medium text-gray-700 transition-colors hover:text-[#008100]"
+              className="text-[13px] font-medium py-2 text-gray-700 transition-colors hover:text-[#008100]"
             >
               Manage Deletion
             </a>
@@ -250,7 +250,7 @@ export default function Navbar() {
             <a
               href="/admin"
               onClick={goToAdmin}
-              className="text-[13px] font-medium text-gray-700 transition-colors hover:text-[#008100]"
+              className="text-[13px] font-medium py-2 text-gray-700 transition-colors hover:text-[#008100]"
             >
               Admin
             </a>

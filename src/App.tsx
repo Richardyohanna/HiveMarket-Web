@@ -85,7 +85,9 @@ function getRouteInfo(pathname: string) {
   if (segments[0] === 'admin' && segments[1] === 'register-shop') {
     return { type: 'admin-register-shop', id: null };
   }
-  if (segments[0] === 'admin') return { type: 'admin', id: null };
+  if (segments[0] === 'admin') {
+    return { type: 'admin', id: null, section: segments[1] || 'overview' };
+  }
   return { type: 'home', id: null };
 }
 
@@ -198,7 +200,7 @@ function App() {
     case 'admin':
       return (
         <RequireAdmin>
-          <AdminDashboard />
+          <AdminDashboard key={route.section} initialSection={route.section} />
         </RequireAdmin>
       );
     case 'admin-register-shop':

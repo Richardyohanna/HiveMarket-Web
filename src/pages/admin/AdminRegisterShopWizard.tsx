@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   createProduct,
   createShop,
+  createShopService,
   createUser,
   searchUsers,
   uploadProductImages,
@@ -38,7 +39,20 @@ type ProductOutcome = {
   message?: string;
 };
 
-const STEPS = ['Owner', 'Shop details', 'Products', 'Review'] as const;
+type DraftService = {
+  localId: string;
+  name: string;
+  description: string;
+  price: string;
+  duration: string;
+  availability: string;
+};
+
+const STEPS = ['Owner', 'Shop details', 'Catalog', 'Review'] as const;
+
+function emptyService(): DraftService {
+  return { localId: crypto.randomUUID(), name: '', description: '', price: '', duration: '', availability: '' };
+}
 
 function emptyProduct(): DraftProduct {
   return {
@@ -89,7 +103,9 @@ export default function AdminRegisterShopWizard() {
   const [shopBanner, setShopBanner] = useState<File | null>(null);
 
   // Step 3: products
-  const [products, setProducts] = useState<DraftProduct[]>([emptyProduct()]);
+  const [products, setProducts] = useState<DraftProduct[]>([]);
+  const [services, setServices] = useState<DraftService[]>([]);
+  const [serviceOutcomes, setServiceOutcomes] = useState<ProductOutcome[]>([]);
 
   // Submission
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -154,6 +170,11 @@ export default function AdminRegisterShopWizard() {
           return 'Every product needs a name, description, price, and category (or remove it).';
         }
       }
+      for (const service of services) {
+        if (!service.name.trim() || !service.description.trim() || !service.price.trim() || Number(service.price) <= 0) {
+          return 'Every service needs a name, description, and a price above 0 (or remove it).';
+        }
+      }
     }
     return null;
   }
@@ -178,7 +199,7 @@ export default function AdminRegisterShopWizard() {
   }
 
   function removeProduct(localId: string) {
-    setProducts((list) => (list.length > 1 ? list.filter((p) => p.localId !== localId) : list));
+    setProducts((list) => list.filter((p) => p.localId !== localId));
   }
 
   async function retryProduct(outcome: ProductOutcome) {
@@ -188,6 +209,42 @@ export default function AdminRegisterShopWizard() {
       list.map((o) => (o.localId === outcome.localId ? { ...o, status: 'pending', message: undefined } : o)),
     );
     await submitSingleProduct(draft, createdShopId);
+  }
+
+  function updateService(localId: string, patch: Partial<DraftService>) {
+    setServices((list) => list.map((s) => (s.localId === localId ? { ...s, ...patch } : s)));
+  }
+
+  async function submitSingleService(draft: DraftService, shopId: string) {
+    try {
+      await createShopService(shopId, {
+        name: draft.name.trim(),
+        description: draft.description.trim(),
+        price: Number(draft.price),
+        duration: draft.duration.trim() || undefined,
+        availability: draft.availability.trim() || undefined,
+      });
+      setServiceOutcomes((list) =>
+        list.map((o) => (o.localId === draft.localId ? { ...o, status: 'success', message: undefined } : o)),
+      );
+    } catch (err) {
+      setServiceOutcomes((list) =>
+        list.map((o) =>
+          o.localId === draft.localId
+            ? { ...o, status: 'error', message: err instanceof ApiError ? err.message : 'Failed to create service.' }
+            : o,
+        ),
+      );
+    }
+  }
+
+  async function retryService(outcome: ProductOutcome) {
+    const draft = services.find((s) => s.localId === outcome.localId);
+    if (!draft || !createdShopId) return;
+    setServiceOutcomes((list) =>
+      list.map((o) => (o.localId === outcome.localId ? { ...o, status: 'pending', message: undefined } : o)),
+    );
+    await submitSingleService(draft, createdShopId);
   }
 
   async function submitSingleProduct(draft: DraftProduct, shopId: string) {
@@ -275,6 +332,13 @@ export default function AdminRegisterShopWizard() {
         await submitSingleProduct(draft, shopId);
       }
 
+      setServiceOutcomes(
+        services.map((s) => ({ localId: s.localId, name: s.name.trim() || 'Untitled service', status: 'pending' as const })),
+      );
+      for (const draft of services) {
+        await submitSingleService(draft, shopId);
+      }
+
       setIsDone(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong while registering the shop.');
@@ -286,12 +350,38 @@ export default function AdminRegisterShopWizard() {
   if (isDone) {
     const successCount = productOutcomes.filter((o) => o.status === 'success').length;
     const failedOutcomes = productOutcomes.filter((o) => o.status === 'error');
+    const serviceSuccess = serviceOutcomes.filter((o) => o.status === 'success').length;
+    const failedServices = serviceOutcomes.filter((o) => o.status === 'error');
+    const parts = [
+      productOutcomes.length ? `${successCount}/${productOutcomes.length} product(s)` : null,
+      serviceOutcomes.length ? `${serviceSuccess}/${serviceOutcomes.length} service(s)` : null,
+    ].filter(Boolean);
     return (
       <PageShell title="Shop registered" maxWidth="max-w-xl">
         <SuccessBanner
-          message={`"${createdShopName}" was created with ${successCount}/${productOutcomes.length} product(s) added successfully.`}
+          message={parts.length === 0
+            ? `"${createdShopName}" was created with no products or services. They can be added later.`
+            : `"${createdShopName}" was created with ${parts.join(' and ')} added successfully.`}
         />
-        {failedOutcomes.length > 0 && (
+        {failedServices.length > 0 && (
+          <div className="mb-4 space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-900">
+              {failedServices.length} service(s) failed to save. You can retry them individually:
+            </p>
+            {failedServices.map((outcome) => (
+              <div key={outcome.localId} className="flex items-center justify-between gap-3 text-sm">
+                <span>{outcome.name} — {outcome.message}</span>
+                <button
+                  type="button"
+                  onClick={() => retryService(outcome)}
+                  className="font-semibold text-[#008100] hover:underline"
+                >
+                  Retry
+                </button>
+              </div>
+            ))}
+          </div>
+        )}        {failedOutcomes.length > 0 && (
           <div className="mb-4 space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-4">
             <p className="text-sm font-semibold text-amber-900">
               {failedOutcomes.length} product(s) failed to save. You can retry them individually:
@@ -508,15 +598,19 @@ export default function AdminRegisterShopWizard() {
 
       {step === 2 && (
         <div className="space-y-6">
+          <div>
+            <h2 className="font-semibold text-[#17191c]">Products (Optional)</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Add products now, or add them later from the shop dashboard.
+            </p>
+          </div>
           {products.map((product, index) => (
             <div key={product.localId} className="space-y-3 rounded-lg border border-[var(--hive-border)] p-4">
               <div className="flex items-center justify-between">
                 <p className="font-semibold">Product {index + 1}</p>
-                {products.length > 1 && (
-                  <button type="button" onClick={() => removeProduct(product.localId)} className="text-sm text-red-600">
-                    Remove
-                  </button>
-                )}
+                <button type="button" onClick={() => removeProduct(product.localId)} className="text-sm text-red-600">
+                  Remove
+                </button>
               </div>
               <div>
                 <FieldLabel>Name</FieldLabel>
@@ -569,7 +663,52 @@ export default function AdminRegisterShopWizard() {
             </div>
           ))}
           <SecondaryButton type="button" onClick={() => setProducts((list) => [...list, emptyProduct()])}>
-            + Add another product
+            + Add product
+          </SecondaryButton>
+          <div className="border-t border-[var(--hive-border)] pt-6">
+            <h2 className="font-semibold text-[#17191c]">Services (Optional)</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Add services if the shop provides services. You can also add them later.
+            </p>
+          </div>
+          {services.map((service, index) => (
+            <div key={service.localId} className="space-y-3 rounded-lg border border-[var(--hive-border)] p-4">
+              <div className="flex items-center justify-between">
+                <p className="font-semibold">Service {index + 1}</p>
+                <button
+                  type="button"
+                  onClick={() => setServices((list) => list.filter((s) => s.localId !== service.localId))}
+                  className="text-sm text-red-600"
+                >
+                  Remove
+                </button>
+              </div>
+              <div>
+                <FieldLabel>Service name</FieldLabel>
+                <TextInput value={service.name} onChange={(e) => updateService(service.localId, { name: e.target.value })} />
+              </div>
+              <div>
+                <FieldLabel>Description</FieldLabel>
+                <TextInput value={service.description} onChange={(e) => updateService(service.localId, { description: e.target.value })} />
+              </div>
+              <div>
+                <FieldLabel>Price (₦)</FieldLabel>
+                <TextInput value={service.price} onChange={(e) => updateService(service.localId, { price: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <FieldLabel>Duration (optional)</FieldLabel>
+                  <TextInput value={service.duration} onChange={(e) => updateService(service.localId, { duration: e.target.value })} />
+                </div>
+                <div>
+                  <FieldLabel>Availability (optional)</FieldLabel>
+                  <TextInput value={service.availability} onChange={(e) => updateService(service.localId, { availability: e.target.value })} />
+                </div>
+              </div>
+            </div>
+          ))}
+          <SecondaryButton type="button" onClick={() => setServices((list) => [...list, emptyService()])}>
+            + Add Service
           </SecondaryButton>
         </div>
       )}
@@ -586,12 +725,28 @@ export default function AdminRegisterShopWizard() {
             <p>{address}</p>
           </div>
           <div className="rounded-lg bg-[var(--hive-background)] p-4">
-            <p className="font-semibold">Products ({products.length})</p>
-            <ul className="list-disc pl-5">
-              {products.map((p) => (
-                <li key={p.localId}>{p.pName || 'Untitled'} — ₦{p.pAmount || 0}</li>
-              ))}
-            </ul>
+            <p className="font-semibold">Products (Optional) ({products.length})</p>
+            {products.length ? (
+              <ul className="list-disc pl-5">
+                {products.map((p) => (
+                  <li key={p.localId}>{p.pName || 'Untitled'} — ₦{p.pAmount || 0}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1 text-gray-600">No products added. You can add them later from the shop dashboard.</p>
+            )}
+          </div>
+          <div className="rounded-lg bg-[var(--hive-background)] p-4">
+            <p className="font-semibold">Services (Optional) ({services.length})</p>
+            {services.length ? (
+              <ul className="list-disc pl-5">
+                {services.map((s) => (
+                  <li key={s.localId}>{s.name || 'Untitled'} — ₦{s.price || 0}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1 text-gray-600">No services added. You can add them later.</p>
+            )}
           </div>
           {productOutcomes.length > 0 && (
             <div className="space-y-1">
