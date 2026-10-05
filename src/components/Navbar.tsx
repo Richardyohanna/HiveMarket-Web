@@ -1,7 +1,9 @@
-import { Menu, X } from 'lucide-react';
+import { Menu, X, User } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { type MouseEvent, useEffect, useState } from 'react';
 import logo from "../assets/favicon.png";
+import { useAuth } from '../lib/AuthContext';
+import { useRouter } from '../lib/router';
 
 const navItems = [
   { label: 'Home', href: '#home' },
@@ -15,6 +17,26 @@ export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState('home');
+  const { isAuthenticated, user } = useAuth();
+  const { navigate } = useRouter();
+
+  const goToAccount = (event: MouseEvent) => {
+    event.preventDefault();
+    setIsOpen(false);
+    navigate(isAuthenticated ? '/account' : '/login');
+  };
+
+  const goToDeletion = (event: MouseEvent) => {
+    event.preventDefault();
+    setIsOpen(false);
+    navigate(isAuthenticated ? '/account-deletion' : '/login');
+  };
+
+  const goToAdmin = (event: MouseEvent) => {
+    event.preventDefault();
+    setIsOpen(false);
+    navigate('/admin');
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -215,23 +237,41 @@ export default function Navbar() {
               />
             </motion.a>
           ))}
+          {isAuthenticated && (
+            <a
+              href="/account-deletion"
+              onClick={goToDeletion}
+              className="text-[13px] font-medium text-gray-700 transition-colors hover:text-[#008100]"
+            >
+              Manage Deletion
+            </a>
+          )}
+          {user?.isAdmin && (
+            <a
+              href="/admin"
+              onClick={goToAdmin}
+              className="text-[13px] font-medium text-gray-700 transition-colors hover:text-[#008100]"
+            >
+              Admin
+            </a>
+          )}
         </nav>
 
         {/* Desktop CTA */}
-        {/*
         <motion.a
-          href="#download"
+          href={isAuthenticated ? '/account' : '/login'}
+          onClick={goToAccount}
           whileHover={{
             y: -2,
             scale: 1.02,
             boxShadow: '0 8px 20px rgba(0,129,0,0.18)',
           }}
           whileTap={{ scale: 0.97 }}
-          className="hidden rounded-md bg-[#008100] px-5 py-2.5 text-[13px] font-semibold text-white md:block"
+          className="hidden items-center gap-1.5 rounded-md bg-[#008100] px-5 py-2.5 text-[13px] font-semibold text-white! md:flex"
         >
-          Download App
+          <User size={15} />
+          {isAuthenticated ? (user?.fullName?.split(' ')[0] || 'Account') : 'Sign In'}
         </motion.a>
-        */}
 
         {/* Mobile Menu Button */}
         <motion.button
@@ -325,12 +365,29 @@ export default function Navbar() {
                   {item.label}
                 </motion.a>
               ))}
+              {isAuthenticated && (
+                <a
+                  href="/account-deletion"
+                  onClick={goToDeletion}
+                  className="border-b border-gray-100 py-4 text-sm font-medium text-gray-700 hover:text-[#008100]"
+                >
+                  Manage Deletion
+                </a>
+              )}
+              {user?.isAdmin && (
+                <a
+                  href="/admin"
+                  onClick={goToAdmin}
+                  className="border-b border-gray-100 py-4 text-sm font-medium text-gray-700 hover:text-[#008100]"
+                >
+                  Admin
+                </a>
+              )}
 
               {/* Mobile CTA */}
-              {/*
               <motion.a
-                href="#download"
-                onClick={closeMenu}
+                href={isAuthenticated ? '/account' : '/login'}
+                onClick={goToAccount}
                 initial={{ y: 10, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{
@@ -338,11 +395,11 @@ export default function Navbar() {
                   delay: navItems.length * 0.05,
                 }}
                 whileTap={{ scale: 0.97 }}
-                className="mt-4 rounded-md bg-[#008100] px-5 py-3 text-center text-sm font-semibold text-white"
+                className="mt-4 flex items-center justify-center gap-1.5 rounded-md bg-[#008100] px-5 py-3 text-center text-sm font-semibold text-white!"
               >
-                Download App
+                <User size={16} />
+                {isAuthenticated ? (user?.fullName?.split(' ')[0] || 'Account') : 'Sign In'}
               </motion.a>
-              */}
             </nav>
           </motion.div>
         )}

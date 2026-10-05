@@ -6,9 +6,17 @@ import HowItWorks from './components/HowItWorks';
 import FAQ from './components/FAQ';
 import Footer from './components/Footer';
 import PointerExperience from './components/PointerExperience';
+import { useRouter } from './lib/router';
+import { RequireAdmin, RequireAuth } from './components/RouteGuards';
+import LoginPage from './pages/LoginPage';
+import AccountPage from './pages/AccountPage';
+import DeleteAccountPage from './pages/DeleteAccountPage';
+import DeleteAccountConfirmPage from './pages/DeleteAccountConfirmPage';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminRegisterShopWizard from './pages/admin/AdminRegisterShopWizard';
+import { API_BASE_URL } from './lib/config';
 
 const WEB_BASE_URL = 'https://hivemarket.ng';
-const API_BASE_URL = 'https://api.hivemarket.ng';
 
 function setMetaTag(property: string, content: string, isProperty = true) {
   const selector = isProperty ? `meta[property="${property}"]` : `meta[name="${property}"]`;
@@ -61,6 +69,23 @@ function getRouteInfo(pathname: string) {
   if (segments[0] === 'profile' && segments[1]) {
     return { type: 'profile', id: segments[1] };
   }
+  if (segments[0] === 'login') return { type: 'login', id: null };
+  if (segments[0] === 'account') return { type: 'account', id: null };
+  if ((segments[0] === 'account-deletion' || segments[0] === 'delete-account')
+      && segments[1] === 'confirm') {
+    return { type: 'account-deletion-confirm', id: null };
+  }
+  if (segments[0] === 'shop-deletion' && segments[1] === 'confirm') {
+    return { type: 'shop-deletion-confirm', id: null };
+  }
+  if (segments[0] === 'account-deletion' || segments[0] === 'shop-deletion'
+      || segments[0] === 'delete-account') {
+    return { type: 'delete-account', id: null };
+  }
+  if (segments[0] === 'admin' && segments[1] === 'register-shop') {
+    return { type: 'admin-register-shop', id: null };
+  }
+  if (segments[0] === 'admin') return { type: 'admin', id: null };
   return { type: 'home', id: null };
 }
 
@@ -147,13 +172,44 @@ function LandingPage() {
 }
 
 function App() {
-  const route = getRouteInfo(window.location.pathname);
+  const { pathname } = useRouter();
+  const route = getRouteInfo(pathname);
 
-  if (route.type === 'home') {
-    return <LandingPage />;
+  switch (route.type) {
+    case 'home':
+      return <LandingPage />;
+    case 'login':
+      return <LoginPage />;
+    case 'account':
+      return (
+        <RequireAuth>
+          <AccountPage />
+        </RequireAuth>
+      );
+    case 'delete-account':
+      return (
+        <RequireAuth>
+          <DeleteAccountPage />
+        </RequireAuth>
+      );
+    case 'account-deletion-confirm':
+    case 'shop-deletion-confirm':
+      return <DeleteAccountConfirmPage />;
+    case 'admin':
+      return (
+        <RequireAdmin>
+          <AdminDashboard />
+        </RequireAdmin>
+      );
+    case 'admin-register-shop':
+      return (
+        <RequireAdmin>
+          <AdminRegisterShopWizard />
+        </RequireAdmin>
+      );
+    default:
+      return <SharePage route={route} />;
   }
-
-  return <SharePage route={route} />;
 }
 
 export default App;
