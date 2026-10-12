@@ -10,6 +10,7 @@ import { useRouter } from './lib/router';
 import { RequireAdmin, RequireAuth } from './components/RouteGuards';
 import LoginPage from './pages/LoginPage';
 import AccountPage from './pages/AccountPage';
+import PasswordChangePage from './pages/PasswordChangePage';
 import DeleteAccountPage from './pages/DeleteAccountPage';
 import DeleteAccountConfirmPage from './pages/DeleteAccountConfirmPage';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -71,6 +72,7 @@ function getRouteInfo(pathname: string) {
   }
   if (segments[0] === 'login') return { type: 'login', id: null };
   if (segments[0] === 'account') return { type: 'account', id: null };
+  if (segments[0] === 'password-change') return { type: 'password-change', id: null };
   if ((segments[0] === 'account-deletion' || segments[0] === 'delete-account')
       && segments[1] === 'confirm') {
     return { type: 'account-deletion-confirm', id: null };
@@ -186,6 +188,12 @@ function App() {
       return (
         <RequireAuth>
           <AccountPage />
+        </RequireAuth>
+      );
+    case 'password-change':
+      return (
+        <RequireAuth>
+          <PasswordChangePage />
         </RequireAuth>
       );
     case 'delete-account':

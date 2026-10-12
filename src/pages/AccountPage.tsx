@@ -12,7 +12,7 @@ export default function AccountPage() {
   }
 
   return (
-    <PageShell title="Your account" subtitle={user?.email}>
+    <PageShell title="Your account" subtitle={user?.email || user?.phone}>
       <div className="space-y-5">
         <div className="rounded-lg border border-[var(--hive-border)] bg-[var(--hive-background)] p-4">
           <p className="text-sm text-[#4b5158]">Full name</p>
@@ -31,6 +31,17 @@ export default function AccountPage() {
             Open Admin console
           </a>
         )}
+
+        <a
+          href="/password-change"
+          onClick={(e) => {
+            e.preventDefault();
+            navigate('/password-change');
+          }}
+          className="block rounded-lg border border-[var(--hive-border)] px-4 py-2.5 text-center text-[15px] font-semibold text-[#17191c] hover:bg-[var(--hive-background)]"
+        >
+          Change password
+        </a>
 
         <a
           href="/account-deletion"

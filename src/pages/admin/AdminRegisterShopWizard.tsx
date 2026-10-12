@@ -75,6 +75,7 @@ export default function AdminRegisterShopWizard() {
 
   // Step 1: owner
   const [ownerMode, setOwnerMode] = useState<'new' | 'existing'>('new');
+  const [ownerAccountType, setOwnerAccountType] = useState<'email' | 'phone'>('email');
   const [ownerFullName, setOwnerFullName] = useState('');
   const [ownerEmail, setOwnerEmail] = useState('');
   const [ownerPhone, setOwnerPhone] = useState('');
@@ -145,8 +146,14 @@ export default function AdminRegisterShopWizard() {
   function validateStep(current: number): string | null {
     if (current === 0) {
       if (ownerMode === 'new') {
-        if (!ownerFullName.trim() || !ownerEmail.trim() || !ownerPassword.trim()) {
-          return 'Please fill in the owner\'s full name, email, and an initial password.';
+        if (!ownerFullName.trim() || !ownerPassword.trim()) {
+          return 'Please fill in the owner\'s full name and an initial password.';
+        }
+        if (ownerAccountType === 'email' && !ownerEmail.trim()) {
+          return 'Please provide the owner\'s email address.';
+        }
+        if (ownerAccountType === 'phone' && !ownerPhone.trim()) {
+          return 'Please provide the owner\'s phone number.';
         }
         if (ownerPassword.length < 8) return 'Password must be at least 8 characters.';
       } else if (!selectedExistingUser) {
@@ -285,12 +292,13 @@ export default function AdminRegisterShopWizard() {
       if (!userId && ownerMode === 'new') {
         const user = await createUser({
           fullName: ownerFullName.trim(),
-          email: ownerEmail.trim(),
-          phone: ownerPhone.trim(),
+          email: ownerAccountType === 'email' ? ownerEmail.trim() : undefined,
+          phone: ownerPhone.trim() || undefined,
           password: ownerPassword,
         });
         userId = user.id;
         setCreatedUserId(user.id);
+        setOwnerPassword('');
       }
 
       if (!userId) throw new Error('No owner selected.');
@@ -448,26 +456,42 @@ export default function AdminRegisterShopWizard() {
 
           {ownerMode === 'new' ? (
             <>
+              <div className="flex gap-2">
+                {(['email', 'phone'] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setOwnerAccountType(type)}
+                    className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${ownerAccountType === type ? 'border-[#008100] bg-[#e8f5e9] text-[#008100]' : 'border-[var(--hive-border)] text-gray-600'}`}
+                  >
+                    {type === 'email' ? 'Email account' : 'Phone-only account'}
+                  </button>
+                ))}
+              </div>
               <div>
                 <FieldLabel>Full name</FieldLabel>
                 <TextInput value={ownerFullName} onChange={(e) => setOwnerFullName(e.target.value)} />
               </div>
+              {ownerAccountType === 'email' && (
+                <div>
+                  <FieldLabel>Email</FieldLabel>
+                  <TextInput type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} />
+                </div>
+              )}
               <div>
-                <FieldLabel>Email</FieldLabel>
-                <TextInput type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} />
+                <FieldLabel>{ownerAccountType === 'phone' ? 'Owner phone number' : 'Phone (optional)'}</FieldLabel>
+                <TextInput type="tel" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} placeholder="+2348012345678 or 08012345678" />
               </div>
               <div>
-                <FieldLabel>Phone</FieldLabel>
-                <TextInput value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} />
-              </div>
-              <div>
-                <FieldLabel>Initial password (min. 8 characters)</FieldLabel>
+                <FieldLabel>Temporary initial password (min. 8 characters)</FieldLabel>
                 <TextInput
-                  type="text"
+                  type="password"
                   value={ownerPassword}
                   onChange={(e) => setOwnerPassword(e.target.value)}
-                  placeholder="Share this with the owner so they can sign in later"
+                  autoComplete="new-password"
+                  placeholder="Communicate privately to the owner"
                 />
+                <p className="mt-1 text-xs text-gray-500">This password is never shown again after registration. Share it with the owner privately.</p>
               </div>
             </>
           ) : (
@@ -491,7 +515,7 @@ export default function AdminRegisterShopWizard() {
                     className={`w-full rounded-lg border px-3 py-2 text-left text-sm ${selectedExistingUser?.id === user.id ? 'border-[#008100] bg-[#e8f5e9]' : 'border-[var(--hive-border)]'}`}
                   >
                     <p className="font-semibold">{user.fullName}</p>
-                    <p className="text-gray-500">{user.email}</p>
+                    <p className="text-gray-500">{user.email || user.phone || 'Phone-only account'}</p>
                   </button>
                 ))}
               </div>
@@ -717,7 +741,9 @@ export default function AdminRegisterShopWizard() {
         <div className="space-y-4 text-sm">
           <div className="rounded-lg bg-[var(--hive-background)] p-4">
             <p className="font-semibold">Owner</p>
-            <p>{ownerMode === 'new' ? `${ownerFullName} (${ownerEmail})` : `${selectedExistingUser?.fullName} (${selectedExistingUser?.email})`}</p>
+            <p>{ownerMode === 'new'
+              ? `${ownerFullName} (${ownerAccountType === 'phone' ? ownerPhone : ownerEmail})`
+              : `${selectedExistingUser?.fullName} (${selectedExistingUser?.email || selectedExistingUser?.phone})`}</p>
           </div>
           <div className="rounded-lg bg-[var(--hive-background)] p-4">
             <p className="font-semibold">Shop</p>

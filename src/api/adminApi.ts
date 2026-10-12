@@ -3,11 +3,12 @@ import { apiFetch } from '../lib/apiClient';
 export type AdminUserSummary = {
   id: string;
   fullName: string;
-  email: string;
-  phone: string;
+  email: string | null;
+  phone: string | null;
   registeredAt: string;
   hasShop: boolean;
   isAdmin: boolean;
+  registrationSource: string;
 };
 
 export type AdminUserDetail = Omit<AdminUserSummary, 'registeredAt'> & {
@@ -160,13 +161,20 @@ export type ShopResponse = {
 
 export type CreateUserPayload = {
   fullName: string;
-  email: string;
-  phone: string;
+  email?: string;
+  phone?: string;
   password: string;
 };
 
 export function createUser(payload: CreateUserPayload) {
   return apiFetch<AdminUserSummary>('/api/admin/users', { method: 'POST', body: payload });
+}
+
+export function resetPhoneOwnerPassword(userId: string, temporaryPassword: string) {
+  return apiFetch<void>(`/api/admin/users/${encodeURIComponent(userId)}/reset-password`, {
+    method: 'POST',
+    body: { temporaryPassword },
+  });
 }
 
 export function searchUsers(query: string) {

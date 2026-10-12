@@ -2,18 +2,28 @@ import { apiFetch } from '../lib/apiClient';
 
 export type MeResponse = {
   userId: string;
-  email: string;
+  email?: string;
+  phone?: string;
   fullName: string;
   isAdmin: boolean;
+  mustChangePassword: boolean;
 };
 
-type TokenPair = { token: string; refreshToken: string };
+type TokenPair = { token: string; refreshToken: string; mustChangePassword?: boolean };
 
-export function login(email: string, password: string) {
+export function login(identifier: string, password: string) {
+  const identity = identifier.trim();
   return apiFetch<TokenPair>('/api/auth/login', {
     method: 'POST',
-    body: { email, password },
+    body: identity.includes('@') ? { email: identity, password } : { phone: identity, password },
     skipAuth: true,
+  });
+}
+
+export function changePassword(currentPassword: string, newPassword: string) {
+  return apiFetch<TokenPair>('/api/auth/change-password', {
+    method: 'POST',
+    body: { currentPassword, newPassword },
   });
 }
 

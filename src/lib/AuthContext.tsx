@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { fetchMe, login as loginRequest, type MeResponse } from '../api/authApi';
+import { changePassword as changePasswordRequest, fetchMe, login as loginRequest, type MeResponse } from '../api/authApi';
 import { clearTokens, hasTokens, setTokens } from './tokenStorage';
 import { ApiError } from './apiClient';
 
@@ -7,7 +7,8 @@ type AuthContextValue = {
   user: MeResponse | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (identifier: string, password: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 };
@@ -70,6 +71,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(me);
   }, []);
 
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    const { token, refreshToken } = await changePasswordRequest(currentPassword, newPassword);
+    setTokens(token, refreshToken);
+    const me = await fetchMe();
+    setUser(me);
+  }, []);
+
   const logout = useCallback(() => {
     clearTokens();
     setUser(null);
@@ -81,10 +89,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       isAuthenticated: Boolean(user),
       login,
+      changePassword,
       logout,
       refreshUser: applyMe,
     }),
-    [user, isLoading, login, logout, applyMe],
+    [user, isLoading, login, changePassword, logout, applyMe],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

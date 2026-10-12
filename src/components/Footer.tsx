@@ -155,7 +155,7 @@ export default function Footer() {
             >
               {/* Facebook */}
               <motion.a
-                href="#"
+                href="https://www.facebook.com/profile.php?id=61595243941932"
                 aria-label="Facebook"
                 variants={{
                   hidden: {
@@ -212,7 +212,7 @@ export default function Footer() {
 
               {/* Instagram */}
               <motion.a
-                href="#"
+                href="https://www.instagram.com/hivemarket_ng/"
                 aria-label="Instagram"
                 variants={{
                   hidden: {
@@ -269,7 +269,7 @@ export default function Footer() {
 
               {/* Twitter */}
               <motion.a
-                href="#"
+                href="https://x.com/HiveMarket001"
                 aria-label="Twitter"
                 variants={{
                   hidden: {

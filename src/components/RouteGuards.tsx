@@ -10,14 +10,16 @@ import { FullPageLoader } from './ui';
  * which is the only real security boundary.
  */
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const { navigate, pathname } = useRouter();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       navigate(`/login?redirect=${encodeURIComponent(pathname)}`, { replace: true });
+    } else if (!isLoading && user?.mustChangePassword && pathname !== '/password-change') {
+      navigate('/password-change', { replace: true });
     }
-  }, [isLoading, isAuthenticated, navigate, pathname]);
+  }, [isLoading, isAuthenticated, user?.mustChangePassword, navigate, pathname]);
 
   if (isLoading) return <FullPageLoader />;
   if (!isAuthenticated) return <FullPageLoader label="Redirecting to sign in…" />;
@@ -32,10 +34,13 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
     if (isLoading) return;
     if (!isAuthenticated) {
       navigate(`/login?redirect=${encodeURIComponent(pathname)}`, { replace: true });
+    } else if (user?.mustChangePassword) {
+      navigate('/password-change', { replace: true });
     }
-  }, [isLoading, isAuthenticated, navigate, pathname]);
+  }, [isLoading, isAuthenticated, user?.mustChangePassword, navigate, pathname]);
 
   if (isLoading || !isAuthenticated) return <FullPageLoader />;
+  if (user?.mustChangePassword) return <FullPageLoader label="Redirecting to password update…" />;
   if (!user?.isAdmin) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[var(--hive-background)] px-4">

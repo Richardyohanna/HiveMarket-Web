@@ -10,6 +10,7 @@ import {
   getAdminSupport,
   getAdminUserDetail,
   getAdminUsers,
+  resetPhoneOwnerPassword,
   sendAdminRequestReminder,
   updateAdminSupport,
   type AdminAnalyticsPoint,
@@ -96,6 +97,9 @@ export default function AdminDashboard({ initialSection = 'overview' }: { initia
   const [notice, setNotice] = useState<string | null>(null);
   const [workingId, setWorkingId] = useState<string | null>(null);
   const [detail, setDetail] = useState<AdminUserDetail | AdminShopDetail | null>(null);
+  const [temporaryPassword, setTemporaryPassword] = useState('');
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [passwordResetMessage, setPasswordResetMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -179,10 +183,31 @@ export default function AdminDashboard({ initialSection = 'overview' }: { initia
   async function openDetails(kind: 'user' | 'shop', id: string) {
     setError(null);
     setDetail(null);
+    setTemporaryPassword('');
+    setPasswordResetMessage(null);
     try {
       setDetail(kind === 'user' ? await getAdminUserDetail(id) : await getAdminShopDetail(id));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not load record details.');
+    }
+  }
+
+  async function resetOwnerPassword() {
+    if (!detail || !('email' in detail) || detail.registrationSource !== 'ADMIN' || detail.email) return;
+    if (temporaryPassword.length < 8) {
+      setPasswordResetMessage('Temporary password must be at least 8 characters.');
+      return;
+    }
+    setResettingPassword(true);
+    setPasswordResetMessage(null);
+    try {
+      await resetPhoneOwnerPassword(detail.id, temporaryPassword);
+      setTemporaryPassword('');
+      setPasswordResetMessage('Temporary password set. Communicate it to the owner privately; they must change it at sign-in.');
+    } catch (err) {
+      setPasswordResetMessage(err instanceof ApiError ? err.message : 'Could not reset the account password.');
+    } finally {
+      setResettingPassword(false);
     }
   }
 
@@ -418,24 +443,50 @@ export default function AdminDashboard({ initialSection = 'overview' }: { initia
           </section>
         )}
         {detail && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" onClick={() => setDetail(null)}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" onClick={() => { setDetail(null); setTemporaryPassword(''); }}>
             <section role="dialog" aria-modal="true" aria-label="Record details" onClick={(event) => event.stopPropagation()}
               className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div><p className="text-xs font-semibold uppercase tracking-wide text-[#008100]">Record details</p>
                   <h3 className="text-xl font-bold text-[#17191c]">{'email' in detail ? detail.fullName : detail.name}</h3></div>
-                <button type="button" aria-label="Close details" className="text-2xl leading-none text-gray-500" onClick={() => setDetail(null)}>×</button>
+                <button type="button" aria-label="Close details" className="text-2xl leading-none text-gray-500" onClick={() => { setDetail(null); setTemporaryPassword(''); }}>×</button>
               </div>
               {'email' in detail ? (
-                <dl className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-2 text-sm">
-                  <Detail label="Name" value={detail.fullName} /><Detail label="Email" value={detail.email} />
-                  <Detail label="Phone" value={detail.phone} /><Detail label="Role" value={detail.role} />
-                  <Detail label="Enabled" value={detail.enabled ? 'Yes' : 'No'} />
-                  <Detail label="Current presence" value={detail.online ? 'Connected now' : 'Offline'} />
-                  <Detail label="Last login" value={displayDate(detail.lastLoginAt)} />
-                  <Detail label="Registered" value={displayDate(detail.registeredAt)} />
-                  <Detail label="Shop" value={detail.shopName} />
-                </dl>
+                <>
+                  <dl className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-2 text-sm">
+                    <Detail label="Name" value={detail.fullName} /><Detail label="Email" value={detail.email} />
+                    <Detail label="Phone" value={detail.phone} /><Detail label="Role" value={detail.role} />
+                    <Detail label="Account created by" value={detail.registrationSource === 'ADMIN' ? 'Administrator' : 'Email registration'} />
+                    <Detail label="Enabled" value={detail.enabled ? 'Yes' : 'No'} />
+                    <Detail label="Current presence" value={detail.online ? 'Connected now' : 'Offline'} />
+                    <Detail label="Last login" value={displayDate(detail.lastLoginAt)} />
+                    <Detail label="Registered" value={displayDate(detail.registeredAt)} />
+                    <Detail label="Shop" value={detail.shopName} />
+                  </dl>
+                  {detail.email === null && detail.registrationSource === 'ADMIN' && (
+                    <div className="mt-5 space-y-3 border-t border-[var(--hive-border)] pt-4">
+                      <h4 className="font-semibold">Administrator-assisted password reset</h4>
+                      <p className="text-xs text-gray-600">Set a temporary password and communicate it privately. It will not be shown again and the owner must change it when signing in.</p>
+                      <TextInput
+                        type="password"
+                        autoComplete="new-password"
+                        aria-label="Temporary password"
+                        placeholder="Temporary password (minimum 8 characters)"
+                        value={temporaryPassword}
+                        onChange={(event) => setTemporaryPassword(event.target.value)}
+                      />
+                      {passwordResetMessage && <p className="text-sm text-gray-700">{passwordResetMessage}</p>}
+                      <SecondaryButton
+                        type="button"
+                        className="bg-[#008100] text-white hover:bg-[#006d24]"
+                        disabled={resettingPassword}
+                        onClick={() => void resetOwnerPassword()}
+                      >
+                        {resettingPassword ? 'Resetting…' : 'Set temporary password'}
+                      </SecondaryButton>
+                    </div>
+                  )}
+                </>
               ) : (
                 <dl className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-2 text-sm">
                   <Detail label="Owner" value={detail.ownerName} /><Detail label="Owner email" value={detail.ownerEmail} />

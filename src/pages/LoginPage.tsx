@@ -7,7 +7,7 @@ import { ErrorBanner, FieldLabel, PageShell, PrimaryButton, TextInput } from '..
 export default function LoginPage() {
   const { login } = useAuth();
   const { navigate } = useRouter();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,11 +22,11 @@ export default function LoginPage() {
     setError(null);
     setIsLoading(true);
     try {
-      await login(email.trim(), password);
+      await login(identifier.trim(), password);
       navigate(redirectTarget, { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.status === 401 ? 'Incorrect email or password.' : err.message);
+        setError(err.status === 401 ? 'Incorrect email/phone or password.' : err.message);
       } else {
         setError('Something went wrong. Please try again.');
       }
@@ -36,18 +36,18 @@ export default function LoginPage() {
   }
 
   return (
-    <PageShell title="Sign in to HiveMarket" subtitle="Use your HiveMarket account email and password.">
+    <PageShell title="Sign in to HiveMarket" subtitle="Use your account email or phone number and password.">
       <ErrorBanner message={error} />
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <FieldLabel>Email</FieldLabel>
+          <FieldLabel>Email or phone number</FieldLabel>
           <TextInput
-            type="email"
-            autoComplete="email"
+            type="text"
+            autoComplete="username"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            placeholder="you@example.com or 08012345678"
           />
         </div>
         <div>
