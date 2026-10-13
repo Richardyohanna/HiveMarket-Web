@@ -1,6 +1,12 @@
 import { apiFetch } from '../lib/apiClient';
 
-export type AdminUserSummary = {
+export type AdminLocation = {
+  country?: string | null;
+  state?: string | null;
+  lga?: string | null;
+};
+
+export type AdminUserSummary = AdminLocation & {
   id: string;
   fullName: string;
   email: string | null;
@@ -9,6 +15,9 @@ export type AdminUserSummary = {
   hasShop: boolean;
   isAdmin: boolean;
   registrationSource: string;
+  status?: string | null;
+  lastActiveAt?: string | null;
+  reportCount?: number | null;
 };
 
 export type AdminUserDetail = Omit<AdminUserSummary, 'registeredAt'> & {
@@ -22,7 +31,7 @@ export type AdminUserDetail = Omit<AdminUserSummary, 'registeredAt'> & {
   shopId: string | null;
 };
 
-export type AdminShopSummary = {
+export type AdminShopSummary = AdminLocation & {
   id: string;
   name: string;
   ownerName: string;
@@ -30,9 +39,14 @@ export type AdminShopSummary = {
   phone: string;
   status: string;
   registeredAt: string;
+  address?: string | null;
+  shopType?: string | null;
+  open?: boolean | null;
+  productCount?: number | null;
+  reportCount?: number | null;
 };
 
-export type AdminShopDetail = {
+export type AdminShopDetail = AdminLocation & {
   id: string;
   name: string;
   ownerName: string | null;
@@ -45,6 +59,8 @@ export type AdminShopDetail = {
   productCount: number;
   registeredAt: string | null;
   deletionStatus: string | null;
+  reportCount?: number | null;
+  gpsCoordinates?: { latitude?: number | null; longitude?: number | null } | null;
 };
 
 export type AdminPage<T> = {
@@ -138,6 +154,45 @@ export type AdminAuditEntry = {
   targetId: string | null;
   metadata: string | null;
   createdAt: string;
+};
+
+export type AdminReportStatus = 'PENDING' | 'UNDER_REVIEW' | 'RESOLVED' | 'DISMISSED';
+export type AdminReportCategory =
+  | 'FRAUD'
+  | 'FAKE_PRODUCT'
+  | 'PROHIBITED_GOODS'
+  | 'HARASSMENT'
+  | 'SPAM'
+  | 'IMPERSONATION'
+  | 'MISLEADING_SHOP'
+  | 'SUSPICIOUS_ACTIVITY'
+  | 'OTHER';
+
+export type AdminReportSummary = {
+  id: string;
+  reporterName: string | null;
+  reporterEmail: string | null;
+  reportedEntityType: 'USER' | 'SHOP' | 'PRODUCT' | string;
+  reportedUserName: string | null;
+  reportedShopName: string | null;
+  reportedProductName: string | null;
+  category: string | null;
+  description: string | null;
+  evidence: string | null;
+  submittedAt: string | null;
+  status: AdminReportStatus | string;
+  assignedAdminName: string | null;
+  decision: string | null;
+  actionTaken: string | null;
+  resolvedAt: string | null;
+};
+
+export type AdminReportDetail = AdminReportSummary & {
+  reporterId?: string | null;
+  reportedUserId?: string | null;
+  reportedShopId?: string | null;
+  reportedProductId?: string | null;
+  evidenceItems?: Array<{ label?: string; url?: string | null; type?: string | null }>;
 };
 
 export type ShopResponse = {
@@ -285,6 +340,69 @@ export function getAdminFeedback(params: { category?: string; page?: number; siz
 
 export function getAdminAudit(params: { page?: number; size?: number }) {
   return apiFetch<AdminPage<AdminAuditEntry>>(`/api/admin/console/audit?${consoleQuery(params)}`);
+}
+
+export function getAdminReports(params: {
+  query?: string;
+  status?: string;
+  category?: string;
+  entityType?: string;
+  page?: number;
+  size?: number;
+}) {
+  return apiFetch<AdminPage<AdminReportSummary>>(`/api/admin/console/reports?${consoleQuery(params)}`);
+}
+
+export function getAdminReportDetail(id: string) {
+  return apiFetch<AdminReportDetail>(`/api/admin/console/reports/${encodeURIComponent(id)}`);
+}
+
+export function updateReportStatus(id: string, update: {
+  status?: string;
+  decision?: string;
+  actionTaken?: string;
+  reason?: string;
+  adminId?: string;
+}) {
+  return apiFetch<AdminReportDetail>(`/api/admin/console/reports/${encodeURIComponent(id)}/status`, {
+    method: 'PUT',
+    body: update,
+  });
+}
+
+export function issueWarning(payload: {
+  userId?: string | null;
+  shopId?: string | null;
+  category: string;
+  explanation: string;
+  reportId?: string | null;
+  remediation?: string | null;
+}) {
+  return apiFetch<{ id: string }>(`/api/admin/moderation/warnings`, {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export function suspendUser(userId: string, reason: string, adminId?: string) {
+  return apiFetch<void>(`/api/admin/moderation/users/${encodeURIComponent(userId)}/suspend`, {
+    method: 'POST',
+    body: { reason, adminId },
+  });
+}
+
+export function banUser(userId: string, reason: string, adminId?: string) {
+  return apiFetch<void>(`/api/admin/moderation/users/${encodeURIComponent(userId)}/ban`, {
+    method: 'POST',
+    body: { reason, adminId },
+  });
+}
+
+export function restoreUser(userId: string, adminId?: string) {
+  return apiFetch<void>(`/api/admin/moderation/users/${encodeURIComponent(userId)}/restore`, {
+    method: 'POST',
+    body: { adminId },
+  });
 }
 
 export function sendAdminRequestReminder(id: string) {

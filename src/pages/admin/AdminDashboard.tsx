@@ -4,6 +4,7 @@ import {
   getAdminAudit,
   getAdminDashboard,
   getAdminFeedback,
+  getAdminReports,
   getAdminRequests,
   getAdminShopDetail,
   getAdminShops,
@@ -18,6 +19,7 @@ import {
   type AdminDashboardMetrics,
   type AdminFeedback,
   type AdminPage,
+  type AdminReportSummary,
   type AdminRequest,
   type AdminShopDetail,
   type AdminShopSummary,
@@ -30,18 +32,23 @@ import { useAuth } from '../../lib/AuthContext';
 import { useRouter } from '../../lib/router';
 import { ErrorBanner, SecondaryButton, SuccessBanner, TextInput } from '../../components/ui';
 
-type AdminTab = 'overview' | 'users' | 'shops' | 'requests' | 'support' | 'feedback' | 'audit';
+type AdminTab = 'overview' | 'users' | 'shops' | 'reports' | 'requests' | 'support' | 'feedback' | 'audit';
 type PageData<T> = AdminPage<T>;
 
 const tabs: { id: AdminTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'users', label: 'Users' },
   { id: 'shops', label: 'Shops' },
+  { id: 'reports', label: 'Reports' },
   { id: 'requests', label: 'Requests' },
   { id: 'support', label: 'Support' },
   { id: 'feedback', label: 'Feedback' },
   { id: 'audit', label: 'Audit history' },
 ];
+
+const reportStatusOptions = ['PENDING', 'UNDER_REVIEW', 'RESOLVED', 'DISMISSED'];
+const reportCategoryOptions = ['FRAUD', 'FAKE_PRODUCT', 'PROHIBITED_GOODS', 'HARASSMENT', 'SPAM', 'IMPERSONATION', 'MISLEADING_SHOP', 'SUSPICIOUS_ACTIVITY', 'OTHER'];
+const reportEntityOptions = ['USER', 'SHOP', 'PRODUCT'];
 
 const cardClass = 'rounded-xl border border-[var(--hive-border)] bg-white p-4';
 const tableClass = 'w-full min-w-[720px] border-collapse text-left text-sm';
@@ -51,6 +58,17 @@ function displayDate(value?: string | null) {
   if (!value) return '—';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function formatLocation(location: { country?: string | null; state?: string | null; lga?: string | null } | null | undefined) {
+  if (!location) return '—';
+  const parts = [location.country, location.state, location.lga].filter((part): part is string => Boolean(part && part.trim()));
+  return parts.length ? parts.join(' • ') : '—';
+}
+
+function displayReportStatus(value?: string | null) {
+  if (!value) return 'Pending';
+  return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function Pagination({ data, onPage }: { data: PageData<unknown> | null; onPage: (page: number) => void }) {
@@ -91,7 +109,11 @@ export default function AdminDashboard({ initialSection = 'overview' }: { initia
   const [requests, setRequests] = useState<PageData<AdminRequest> | null>(null);
   const [support, setSupport] = useState<PageData<AdminSupportRequest> | null>(null);
   const [feedback, setFeedback] = useState<PageData<AdminFeedback> | null>(null);
+  const [reports, setReports] = useState<PageData<AdminReportSummary> | null>(null);
   const [audit, setAudit] = useState<PageData<AdminAuditEntry> | null>(null);
+  const [reportStatusFilter, setReportStatusFilter] = useState('');
+  const [reportCategoryFilter, setReportCategoryFilter] = useState('');
+  const [reportEntityFilter, setReportEntityFilter] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -119,6 +141,16 @@ export default function AdminDashboard({ initialSection = 'overview' }: { initia
         } else if (tab === 'shops') {
           const data = await getAdminShops({ query: appliedQuery, page, size: 20 });
           if (!cancelled) setShops(data);
+        } else if (tab === 'reports') {
+          const data = await getAdminReports({
+            query: appliedQuery,
+            status: reportStatusFilter || undefined,
+            category: reportCategoryFilter || undefined,
+            entityType: reportEntityFilter || undefined,
+            page,
+            size: 20,
+          });
+          if (!cancelled) setReports(data);
         } else if (tab === 'requests') {
           const data = await getAdminRequests({ query: appliedQuery, status: filter || undefined, page, size: 20 });
           if (!cancelled) setRequests(data);
@@ -140,12 +172,15 @@ export default function AdminDashboard({ initialSection = 'overview' }: { initia
     }
     void load();
     return () => { cancelled = true; };
-  }, [tab, appliedQuery, filter, page, refreshKey]);
+  }, [tab, appliedQuery, filter, page, refreshKey, reportStatusFilter, reportCategoryFilter, reportEntityFilter]);
 
   function selectTab(nextTab: AdminTab) {
     setTab(nextTab);
     setPage(0);
     setFilter('');
+    setReportStatusFilter('');
+    setReportCategoryFilter('');
+    setReportEntityFilter('');
     setNotice(null);
     navigate(nextTab === 'overview' ? '/admin' : `/admin/${nextTab}`);
   }
@@ -266,9 +301,9 @@ export default function AdminDashboard({ initialSection = 'overview' }: { initia
         <ErrorBanner message={error} />
         <SuccessBanner message={notice} />
 
-        {(tab === 'users' || tab === 'shops' || tab === 'requests') && (
+        {(tab === 'users' || tab === 'shops' || tab === 'requests' || tab === 'reports') && (
           <div className="mb-4 flex flex-col gap-2 sm:flex-row">
-            <TextInput placeholder={`Search ${tab} by name or email`} value={query} onChange={(event) => setQuery(event.target.value)}
+            <TextInput placeholder={tab === 'reports' ? 'Search reports by reporter or subject' : `Search ${tab} by name or email`} value={query} onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
                   setPage(0);
@@ -282,21 +317,52 @@ export default function AdminDashboard({ initialSection = 'overview' }: { initia
           </div>
         )}
 
-        {(tab === 'requests' || tab === 'support' || tab === 'feedback') && (
-          <div className="mb-4">
-            <label className="sr-only" htmlFor="admin-filter">Filter records</label>
-            <select id="admin-filter" value={filter} onChange={(event) => {
-              setPage(0);
-              setFilter(event.target.value);
-            }} className="rounded-lg border border-[var(--hive-border)] bg-white px-3 py-2.5 text-sm text-[#17191c]">
-              <option value="">All {tab}</option>
-              {(tab === 'requests'
-                ? ['PENDING', 'ACCEPTED', 'DECLINED', 'PREPARING', 'READY_FOR_PICKUP', 'COMPLETED', 'CANCELLED']
-                : tab === 'support'
-                  ? ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED']
-                  : ['LOVE', 'IDEA', 'BUG', 'OTHER']
-              ).map((value) => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}
-            </select>
+        {(tab === 'reports' || tab === 'requests' || tab === 'support' || tab === 'feedback') && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            {tab === 'reports' ? (
+              <>
+                <label className="sr-only" htmlFor="report-status-filter">Filter by report status</label>
+                <select id="report-status-filter" value={reportStatusFilter} onChange={(event) => {
+                  setPage(0);
+                  setReportStatusFilter(event.target.value);
+                }} className="rounded-lg border border-[var(--hive-border)] bg-white px-3 py-2.5 text-sm text-[#17191c]">
+                  <option value="">All statuses</option>
+                  {reportStatusOptions.map((value) => <option key={value} value={value}>{displayReportStatus(value)}</option>)}
+                </select>
+                <label className="sr-only" htmlFor="report-category-filter">Filter by report category</label>
+                <select id="report-category-filter" value={reportCategoryFilter} onChange={(event) => {
+                  setPage(0);
+                  setReportCategoryFilter(event.target.value);
+                }} className="rounded-lg border border-[var(--hive-border)] bg-white px-3 py-2.5 text-sm text-[#17191c]">
+                  <option value="">All categories</option>
+                  {reportCategoryOptions.map((value) => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}
+                </select>
+                <label className="sr-only" htmlFor="report-entity-filter">Filter by entity type</label>
+                <select id="report-entity-filter" value={reportEntityFilter} onChange={(event) => {
+                  setPage(0);
+                  setReportEntityFilter(event.target.value);
+                }} className="rounded-lg border border-[var(--hive-border)] bg-white px-3 py-2.5 text-sm text-[#17191c]">
+                  <option value="">All entities</option>
+                  {reportEntityOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </>
+            ) : (
+              <>
+                <label className="sr-only" htmlFor="admin-filter">Filter records</label>
+                <select id="admin-filter" value={filter} onChange={(event) => {
+                  setPage(0);
+                  setFilter(event.target.value);
+                }} className="rounded-lg border border-[var(--hive-border)] bg-white px-3 py-2.5 text-sm text-[#17191c]">
+                  <option value="">All {tab}</option>
+                  {(tab === 'requests'
+                    ? ['PENDING', 'ACCEPTED', 'DECLINED', 'PREPARING', 'READY_FOR_PICKUP', 'COMPLETED', 'CANCELLED']
+                    : tab === 'support'
+                      ? ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED']
+                      : ['LOVE', 'IDEA', 'BUG', 'OTHER']
+                  ).map((value) => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}
+                </select>
+              </>
+            )}
           </div>
         )}
 
@@ -347,14 +413,18 @@ export default function AdminDashboard({ initialSection = 'overview' }: { initia
           <section className={cardClass}>
             <h3 className="mb-3 font-bold">Users</h3>
             <div className="overflow-x-auto"><table className={tableClass}>
-              <thead className={headClass}><tr>{['Name', 'Email', 'Phone', 'Registered', 'Account', 'Details'].map((x) => <th key={x} className="px-3 py-2">{x}</th>)}</tr></thead>
+              <thead className={headClass}><tr>{['Name', 'Location', 'Email', 'Phone', 'Registered', 'Status', 'Reports', 'Details'].map((x) => <th key={x} className="px-3 py-2">{x}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--hive-border)]">{users?.content.map((entry) => <tr key={entry.id}>
-                <td className="px-3 py-3 font-medium">{entry.fullName}</td><td className="px-3 py-3">{entry.email}</td>
-                <td className="px-3 py-3">{entry.phone || '—'}</td><td className="px-3 py-3">{displayDate(entry.registeredAt)}</td>
-                <td className="px-3 py-3">{entry.isAdmin ? 'Admin' : entry.hasShop ? 'Shop owner' : 'Customer'}</td>
+                <td className="px-3 py-3 font-medium">{entry.fullName}</td>
+                <td className="px-3 py-3">{formatLocation(entry)}</td>
+                <td className="px-3 py-3">{entry.email || '—'}</td>
+                <td className="px-3 py-3">{entry.phone || '—'}</td>
+                <td className="px-3 py-3">{displayDate(entry.registeredAt)}</td>
+                <td className="px-3 py-3">{entry.status || (entry.isAdmin ? 'Admin' : entry.hasShop ? 'Shop owner' : 'Customer')}</td>
+                <td className="px-3 py-3">{entry.reportCount ?? 0}</td>
                 <td className="px-3 py-3"><button type="button" className="font-semibold text-[#008100]" onClick={() => void openDetails('user', entry.id)}>View</button></td>
               </tr>)}
-              {!users?.content.length && <EmptyRow cols={6} loading={isLoading} />}
+              {!users?.content.length && <EmptyRow cols={8} loading={isLoading} />}
               </tbody></table></div>
             <Pagination data={users} onPage={setPage} />
           </section>
@@ -364,16 +434,41 @@ export default function AdminDashboard({ initialSection = 'overview' }: { initia
           <section className={cardClass}>
             <h3 className="mb-3 font-bold">Shops</h3>
             <div className="overflow-x-auto"><table className={tableClass}>
-              <thead className={headClass}><tr>{['Shop', 'Owner', 'Owner email', 'Phone', 'Status', 'Registered', 'Details'].map((x) => <th key={x} className="px-3 py-2">{x}</th>)}</tr></thead>
+              <thead className={headClass}><tr>{['Shop', 'Owner', 'Location', 'Phone', 'Status', 'Registered', 'Reports', 'Details'].map((x) => <th key={x} className="px-3 py-2">{x}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--hive-border)]">{shops?.content.map((entry) => <tr key={entry.id}>
-                <td className="px-3 py-3 font-medium">{entry.name}</td><td className="px-3 py-3">{entry.ownerName || '—'}</td>
-                <td className="px-3 py-3">{entry.ownerEmail || '—'}</td><td className="px-3 py-3">{entry.phone || '—'}</td>
-                <td className="px-3 py-3">{entry.status}</td><td className="px-3 py-3">{displayDate(entry.registeredAt)}</td>
+                <td className="px-3 py-3 font-medium">{entry.name}</td>
+                <td className="px-3 py-3">{entry.ownerName || '—'}</td>
+                <td className="px-3 py-3">{formatLocation(entry)}</td>
+                <td className="px-3 py-3">{entry.phone || '—'}</td>
+                <td className="px-3 py-3">{entry.status}</td>
+                <td className="px-3 py-3">{displayDate(entry.registeredAt)}</td>
+                <td className="px-3 py-3">{entry.reportCount ?? 0}</td>
                 <td className="px-3 py-3"><button type="button" className="font-semibold text-[#008100]" onClick={() => void openDetails('shop', entry.id)}>View</button></td>
               </tr>)}
-              {!shops?.content.length && <EmptyRow cols={7} loading={isLoading} />}
+              {!shops?.content.length && <EmptyRow cols={8} loading={isLoading} />}
               </tbody></table></div>
             <Pagination data={shops} onPage={setPage} />
+          </section>
+        )}
+
+        {tab === 'reports' && (
+          <section className={cardClass}>
+            <h3 className="mb-3 font-bold">Reports and moderation</h3>
+            <div className="overflow-x-auto"><table className={tableClass}>
+              <thead className={headClass}><tr>{['ID', 'Reporter', 'Reported', 'Category', 'Status', 'Submitted', 'Decision', 'Action'].map((x) => <th key={x} className="px-3 py-2">{x}</th>)}</tr></thead>
+              <tbody className="divide-y divide-[var(--hive-border)]">{reports?.content.map((entry) => <tr key={entry.id}>
+                <td className="px-3 py-3 font-medium">{entry.id.slice(0, 8)}</td>
+                <td className="px-3 py-3">{entry.reporterName || '—'}<div className="text-xs text-gray-500">{entry.reporterEmail || 'No email'}</div></td>
+                <td className="px-3 py-3">{entry.reportedShopName || entry.reportedUserName || entry.reportedProductName || '—'}</td>
+                <td className="px-3 py-3">{entry.category ? entry.category.replaceAll('_', ' ') : '—'}</td>
+                <td className="px-3 py-3">{displayReportStatus(entry.status)}</td>
+                <td className="px-3 py-3">{displayDate(entry.submittedAt)}</td>
+                <td className="px-3 py-3">{entry.decision || '—'}</td>
+                <td className="px-3 py-3">{entry.actionTaken || '—'}</td>
+              </tr>)}
+              {!reports?.content.length && <EmptyRow cols={8} loading={isLoading} />}
+              </tbody></table></div>
+            <Pagination data={reports} onPage={setPage} />
           </section>
         )}
 
@@ -456,11 +551,14 @@ export default function AdminDashboard({ initialSection = 'overview' }: { initia
                   <dl className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-2 text-sm">
                     <Detail label="Name" value={detail.fullName} /><Detail label="Email" value={detail.email} />
                     <Detail label="Phone" value={detail.phone} /><Detail label="Role" value={detail.role} />
+                    <Detail label="Country" value={detail.country ?? null} /><Detail label="State" value={detail.state ?? null} />
+                    <Detail label="LGA" value={detail.lga ?? null} /><Detail label="Last seen" value={displayDate(detail.lastActiveAt || detail.lastLoginAt)} />
                     <Detail label="Account created by" value={detail.registrationSource === 'ADMIN' ? 'Administrator' : 'Email registration'} />
                     <Detail label="Enabled" value={detail.enabled ? 'Yes' : 'No'} />
                     <Detail label="Current presence" value={detail.online ? 'Connected now' : 'Offline'} />
                     <Detail label="Last login" value={displayDate(detail.lastLoginAt)} />
                     <Detail label="Registered" value={displayDate(detail.registeredAt)} />
+                    <Detail label="Reports" value={detail.reportCount != null ? String(detail.reportCount) : null} />
                     <Detail label="Shop" value={detail.shopName} />
                   </dl>
                   {detail.email === null && detail.registrationSource === 'ADMIN' && (
@@ -478,7 +576,7 @@ export default function AdminDashboard({ initialSection = 'overview' }: { initia
                       {passwordResetMessage && <p className="text-sm text-gray-700">{passwordResetMessage}</p>}
                       <SecondaryButton
                         type="button"
-                        className="bg-[#008100] text-white hover:bg-[#006d24]"
+                        className="bg-[#008100]! text-white hover:bg-[#006d24]!"
                         disabled={resettingPassword}
                         onClick={() => void resetOwnerPassword()}
                       >
@@ -489,11 +587,15 @@ export default function AdminDashboard({ initialSection = 'overview' }: { initia
                 </>
               ) : (
                 <dl className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-2 text-sm">
-                  <Detail label="Owner" value={detail.ownerName} /><Detail label="Owner email" value={detail.ownerEmail} />
-                  <Detail label="Phone" value={detail.phone} /><Detail label="Type" value={detail.shopType} />
-                  <Detail label="Address" value={detail.address} /><Detail label="Open" value={detail.open ? 'Yes' : 'No'} />
+                  <Detail label="Owner" value={detail.ownerName ?? null} /><Detail label="Owner email" value={detail.ownerEmail ?? null} />
+                  <Detail label="Phone" value={detail.phone ?? null} /><Detail label="Type" value={detail.shopType ?? null} />
+                  <Detail label="Country" value={detail.country ?? null} /><Detail label="State" value={detail.state ?? null} />
+                  <Detail label="LGA" value={detail.lga ?? null} /><Detail label="Address" value={detail.address ?? null} />
+                  <Detail label="GPS" value={detail.gpsCoordinates ? `${detail.gpsCoordinates.latitude ?? '—'}, ${detail.gpsCoordinates.longitude ?? '—'}` : null} />
+                  <Detail label="Open" value={detail.open ? 'Yes' : 'No'} />
                   <Detail label="Verified" value={detail.verified ? 'Yes' : 'No'} />
                   <Detail label="Active products" value={String(detail.productCount)} />
+                  <Detail label="Reports" value={detail.reportCount != null ? String(detail.reportCount) : null} />
                   <Detail label="Registered" value={displayDate(detail.registeredAt)} />
                 </dl>
               )}
