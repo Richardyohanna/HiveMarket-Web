@@ -102,11 +102,35 @@ export default function Footer() {
                     }
               }
             >
-             <img
-                src={logo}
-                alt="HiveMarket Logo"
-                className="h-full w-full object-cover object-center"
-                /> 
+              <motion.div
+                className="
+                  flex
+                  h-9
+                  w-9
+                  items-center
+                  justify-center
+                "
+                whileHover={
+                  shouldReduceMotion
+                    ? undefined
+                    : {
+                        rotate: -5,
+                        scale: 1.05,
+                      }
+                }
+                transition={{
+                  type: 'spring',
+                  stiffness: 300,
+                  damping: 15,
+                }}
+              >
+                <img 
+                  src={logo}
+                  alt="HiveMarket Logo"
+                  className="h-full w-full object-cover object-center"
+                />
+
+              </motion.div>
 
               <span className="text-xl font-bold tracking-tight text-[#17191c]">
                 HiveMarket
