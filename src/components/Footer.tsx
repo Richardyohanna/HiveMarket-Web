@@ -6,6 +6,7 @@ import {
   FaTwitter,
 } from 'react-icons/fa';
 import { motion, useReducedMotion } from 'framer-motion';
+import logo from "../assets/favicon.png";
 
 const footerLinks = [
   { label: 'Home', href: '#home' },
