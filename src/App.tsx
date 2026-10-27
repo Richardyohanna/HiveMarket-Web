@@ -16,6 +16,7 @@ import DeleteAccountConfirmPage from './pages/DeleteAccountConfirmPage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminRegisterShopWizard from './pages/admin/AdminRegisterShopWizard';
 import AdminShopManagementPage from './pages/admin/AdminShopManagementPage';
+import ShopManagementPage from './pages/ShopManagementPage';
 import { API_BASE_URL } from './lib/config';
 
 const WEB_BASE_URL = 'https://hivemarket.ng';
@@ -73,6 +74,7 @@ function getRouteInfo(pathname: string) {
   }
   if (segments[0] === 'login') return { type: 'login', id: null };
   if (segments[0] === 'account') return { type: 'account', id: null };
+  if (segments[0] === 'shop-management') return { type: 'shop-management', id: null };
   if (segments[0] === 'password-change') return { type: 'password-change', id: null };
   if ((segments[0] === 'account-deletion' || segments[0] === 'delete-account')
       && segments[1] === 'confirm') {
@@ -192,6 +194,12 @@ function App() {
       return (
         <RequireAuth>
           <AccountPage />
+        </RequireAuth>
+      );
+    case 'shop-management':
+      return (
+        <RequireAuth>
+          <ShopManagementPage />
         </RequireAuth>
       );
     case 'password-change':

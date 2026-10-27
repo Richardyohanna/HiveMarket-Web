@@ -236,6 +236,7 @@ export type AdminShopProduct = {
   pName: string;
   pDetail: string;
   pAmount: number;
+  pDiscount?: number | null;
   pCondition: string;
   pQuantity: number;
   category: string;

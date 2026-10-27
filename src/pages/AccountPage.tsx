@@ -33,6 +33,17 @@ export default function AccountPage() {
         )}
 
         <a
+          href="/shop-management"
+          onClick={(e) => {
+            e.preventDefault();
+            navigate('/shop-management');
+          }}
+          className="block rounded-lg border border-[var(--hive-border)] px-4 py-2.5 text-center text-[15px] font-semibold text-[#17191c] hover:bg-[var(--hive-background)]"
+        >
+          Manage shop listings
+        </a>
+
+        <a
           href="/password-change"
           onClick={(e) => {
             e.preventDefault();

@@ -343,7 +343,7 @@ export default function DownloadCta() {
               ================================================== */}
 
               <motion.a
-                href="/hivemarket.apk"
+                href="https://play.google.com/store/apps/details?id=com.richard091.hiveMarket&pcampaignid=web_share"
                 whileHover={
                   shouldReduceMotion
                     ? undefined
@@ -422,7 +422,7 @@ export default function DownloadCta() {
                 />
 
                 <span className="relative z-10">
-                  Download for Android
+                  Get it on Play Store
                 </span>
               </motion.a>
 

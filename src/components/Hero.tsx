@@ -277,7 +277,7 @@ export default function Hero() {
             {/* Android */}
 
             <motion.a
-              href="/hivemarket.apk"
+              href="https://play.google.com/store/apps/details?id=com.richard091.hiveMarket&pcampaignid=web_share"
               whileHover={
                 shouldReduceMotion
                   ? undefined
@@ -326,7 +326,7 @@ export default function Hero() {
                 alt="Android icon"
               />
 
-              Download for Android
+              Download on Play Store
             </motion.a>
 
             {/* iOS */}
