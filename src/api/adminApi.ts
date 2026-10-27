@@ -4,6 +4,7 @@ export type AdminLocation = {
   country?: string | null;
   state?: string | null;
   lga?: string | null;
+  address?: string | null;
 };
 
 export type AdminUserSummary = AdminLocation & {
@@ -39,10 +40,10 @@ export type AdminShopSummary = AdminLocation & {
   phone: string;
   status: string;
   registeredAt: string;
-  address?: string | null;
   shopType?: string | null;
   open?: boolean | null;
   productCount?: number | null;
+  serviceCount?: number | null;
   reportCount?: number | null;
 };
 
@@ -60,6 +61,22 @@ export type AdminShopDetail = AdminLocation & {
   registeredAt: string | null;
   deletionStatus: string | null;
   reportCount?: number | null;
+  country?: string | null;
+  state?: string | null;
+  lga?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  image?: string | null;
+  banner?: string | null;
+  slogan?: string | null;
+  website?: string | null;
+  university?: string | null;
+  areaName?: string | null;
+  categories?: string[] | null;
+  operatingMode?: 'FIXED' | 'FLEXIBLE' | null;
+  openTime?: string | null;
+  closingTime?: string | null;
+  serviceCount?: number;
   gpsCoordinates?: { latitude?: number | null; longitude?: number | null } | null;
 };
 
@@ -214,6 +231,52 @@ export type ShopResponse = {
   [key: string]: unknown;
 };
 
+export type AdminShopProduct = {
+  id: string;
+  pName: string;
+  pDetail: string;
+  pAmount: number;
+  pCondition: string;
+  pQuantity: number;
+  category: string;
+  imageUrls?: string[];
+};
+
+export type AdminShopService = {
+  id: string;
+  shopId: string;
+  name: string;
+  description: string;
+  price: number;
+  duration?: string | null;
+  availability?: string | null;
+};
+
+export type AdminShopUpdatePayload = {
+  name: string;
+  phone: string;
+  address: string;
+  country: string;
+  state: string;
+  lga: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  isOpen: boolean;
+  slogan?: string;
+  website?: string;
+  university?: string;
+  areaName?: string;
+  operatingMode?: 'FIXED' | 'FLEXIBLE';
+  openTime?: string;
+  closingTime?: string;
+  image?: File | null;
+  banner?: File | null;
+};
+
+export function getNigeriaLocations() {
+  return apiFetch<Record<string, string[]>>('/api/locations/nigeria', { skipAuth: true });
+}
+
 export type CreateUserPayload = {
   fullName: string;
   email?: string;
@@ -250,6 +313,9 @@ export type CreateShopPayload = {
   openingTime?: string; // formatted "h:mm a"
   closingTime?: string;
   operatingMode?: 'FIXED' | 'FLEXIBLE';
+  country: string;
+  state: string;
+  lga: string;
   address: string;
   latitude: number;
   longitude: number;
@@ -273,7 +339,11 @@ export function createShop(payload: CreateShopPayload) {
   if (payload.customShopType) form.append('customShopType', payload.customShopType);
   if (payload.openingTime) form.append('openingTime', payload.openingTime);
   if (payload.closingTime) form.append('closingTime', payload.closingTime);
+
   if (payload.operatingMode) form.append('operatingMode', payload.operatingMode);
+  form.append('country', payload.country);
+  form.append('state', payload.state);
+  form.append('lga', payload.lga);
   payload.categories.forEach((category) => form.append('categories', category));
   if (payload.image) form.append('image', payload.image);
   if (payload.banner) form.append('banner', payload.banner);
@@ -317,6 +387,44 @@ export function getAdminShops(params: { query?: string; page?: number; size?: nu
 
 export function getAdminShopDetail(id: string) {
   return apiFetch<AdminShopDetail>(`/api/admin/console/shops/${encodeURIComponent(id)}`);
+}
+
+export function updateAdminShop(id: string, payload: AdminShopUpdatePayload) {
+  const form = new FormData();
+  form.append('name', payload.name);
+  form.append('phone', payload.phone);
+  form.append('address', payload.address);
+  form.append('country', payload.country);
+  form.append('state', payload.state);
+  form.append('lga', payload.lga);
+  form.append('isOpen', String(payload.isOpen));
+  if (payload.latitude != null) form.append('latitude', String(payload.latitude));
+  if (payload.longitude != null) form.append('longitude', String(payload.longitude));
+  if (payload.slogan != null) form.append('slogan', payload.slogan);
+  if (payload.website != null) form.append('website', payload.website);
+  if (payload.university != null) form.append('university', payload.university);
+  if (payload.areaName != null) form.append('areaName', payload.areaName);
+  if (payload.operatingMode) form.append('operatingMode', payload.operatingMode);
+  if (payload.openTime) form.append('openTime', payload.openTime);
+  if (payload.closingTime) form.append('closingTime', payload.closingTime);
+  if (payload.image) form.append('image', payload.image);
+  if (payload.banner) form.append('banner', payload.banner);
+
+  return apiFetch(`/api/shop/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: form,
+    isFormData: true,
+  });
+}
+
+export function getAdminShopProducts(shopId: string) {
+  return apiFetch<AdminShopProduct[]>(
+    `/api/products/shop/all?shopId=${encodeURIComponent(shopId)}`,
+  );
+}
+
+export function getAdminShopServices(shopId: string) {
+  return apiFetch<AdminShopService[]>(`/api/shops/${encodeURIComponent(shopId)}/services`);
 }
 
 export function getAdminRequests(params: { query?: string; status?: string; page?: number; size?: number }) {
@@ -409,10 +517,8 @@ export function sendAdminRequestReminder(id: string) {
   return apiFetch<void>(`/api/admin/console/requests/${encodeURIComponent(id)}/remind`, { method: 'POST' });
 }
 
-// --- Product registration (reuses the existing authenticated product endpoint;
-// when shopId is supplied, the backend attaches the product to that shop
-// regardless of which account created it, which is exactly what the admin
-// console needs - no dedicated admin product endpoint exists or is required). ---
+// Reuses the authenticated product endpoint; the backend allows the shop owner
+// or an administrator to manage products associated with the shop.
 
 export type CreateProductPayload = {
   pName: string;
@@ -435,6 +541,17 @@ export function createProduct(payload: CreateProductPayload) {
   return apiFetch<ProductResponse>('/api/products', { method: 'POST', body: payload });
 }
 
+export function updateAdminShopProduct(id: string, payload: CreateProductPayload) {
+  return apiFetch<ProductResponse>(`/api/products?id=${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: payload,
+  });
+}
+
+export function deleteAdminShopProduct(id: string) {
+  return apiFetch<void>(`/api/products?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 // Reuses the existing authenticated shop-service endpoint.
 export type CreateServicePayload = {
   name: string;
@@ -449,6 +566,17 @@ export function createShopService(shopId: string, payload: CreateServicePayload)
     method: 'POST',
     body: payload,
   });
+}
+
+export function updateAdminShopService(id: string, payload: CreateServicePayload) {
+  return apiFetch<{ id: string; name: string }>(`/api/services/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: payload,
+  });
+}
+
+export function deleteAdminShopService(id: string) {
+  return apiFetch<void>(`/api/services/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export function uploadProductImages(productId: string, images: File[]) {

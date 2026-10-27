@@ -60,9 +60,10 @@ function displayDate(value?: string | null) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
-function formatLocation(location: { country?: string | null; state?: string | null; lga?: string | null } | null | undefined) {
+function formatLocation(location: { address?: string | null; country?: string | null; state?: string | null; lga?: string | null } | null | undefined) {
   if (!location) return '—';
-  const parts = [location.country, location.state, location.lga].filter((part): part is string => Boolean(part && part.trim()));
+  const parts = [location.address, location.lga, location.state, location.country]
+    .filter((part): part is string => Boolean(part && part.trim()));
   return parts.length ? parts.join(' • ') : '—';
 }
 
@@ -434,7 +435,7 @@ export default function AdminDashboard({ initialSection = 'overview' }: { initia
           <section className={cardClass}>
             <h3 className="mb-3 font-bold">Shops</h3>
             <div className="overflow-x-auto"><table className={tableClass}>
-              <thead className={headClass}><tr>{['Shop', 'Owner', 'Location', 'Phone', 'Status', 'Registered', 'Reports', 'Details'].map((x) => <th key={x} className="px-3 py-2">{x}</th>)}</tr></thead>
+              <thead className={headClass}><tr>{['Shop', 'Owner', 'Location', 'Phone', 'Status', 'Registered', 'Reports', 'Actions'].map((x) => <th key={x} className="px-3 py-2">{x}</th>)}</tr></thead>
               <tbody className="divide-y divide-[var(--hive-border)]">{shops?.content.map((entry) => <tr key={entry.id}>
                 <td className="px-3 py-3 font-medium">{entry.name}</td>
                 <td className="px-3 py-3">{entry.ownerName || '—'}</td>
@@ -443,7 +444,12 @@ export default function AdminDashboard({ initialSection = 'overview' }: { initia
                 <td className="px-3 py-3">{entry.status}</td>
                 <td className="px-3 py-3">{displayDate(entry.registeredAt)}</td>
                 <td className="px-3 py-3">{entry.reportCount ?? 0}</td>
-                <td className="px-3 py-3"><button type="button" className="font-semibold text-[#008100]" onClick={() => void openDetails('shop', entry.id)}>View</button></td>
+                <td className="px-3 py-3">
+                  <div className="flex gap-3">
+                    <button type="button" className="font-semibold text-[#008100]" onClick={() => navigate(`/admin/shops/${encodeURIComponent(entry.id)}`)}>Manage</button>
+                    <button type="button" className="font-semibold text-gray-600" onClick={() => void openDetails('shop', entry.id)}>Details</button>
+                  </div>
+                </td>
               </tr>)}
               {!shops?.content.length && <EmptyRow cols={8} loading={isLoading} />}
               </tbody></table></div>

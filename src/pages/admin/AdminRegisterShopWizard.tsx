@@ -1,11 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  createProduct,
   createShop,
-  createShopService,
   createUser,
+  getNigeriaLocations,
   searchUsers,
-  uploadProductImages,
   type AdminUserSummary,
 } from '../../api/adminApi';
 import { ApiError } from '../../lib/apiClient';
@@ -16,56 +14,26 @@ import {
   PageShell,
   PrimaryButton,
   SecondaryButton,
-  SuccessBanner,
   TextInput,
 } from '../../components/ui';
 
-type DraftProduct = {
-  localId: string;
-  pName: string;
-  pDetail: string;
-  pAmount: string;
-  pDiscount: string;
-  pCondition: 'NEW' | 'USED';
-  pQuantity: string;
-  category: string;
-  images: File[];
-};
+const STEPS = ['Owner', 'Shop details', 'Review'] as const;
+const COUNTRY_OPTIONS = [
+  'Nigeria',
+  'Ghana',
+  'Kenya',
+  'South Africa',
+  'United Kingdom',
+  'United States',
+  'Canada',
+  'United Arab Emirates',
+  'Other',
+];
 
-type ProductOutcome = {
-  localId: string;
-  name: string;
-  status: 'pending' | 'success' | 'error';
-  message?: string;
-};
+type NigeriaLocations = Record<string, string[]>;
 
-type DraftService = {
-  localId: string;
-  name: string;
-  description: string;
-  price: string;
-  duration: string;
-  availability: string;
-};
-
-const STEPS = ['Owner', 'Shop details', 'Catalog', 'Review'] as const;
-
-function emptyService(): DraftService {
-  return { localId: crypto.randomUUID(), name: '', description: '', price: '', duration: '', availability: '' };
-}
-
-function emptyProduct(): DraftProduct {
-  return {
-    localId: crypto.randomUUID(),
-    pName: '',
-    pDetail: '',
-    pAmount: '',
-    pDiscount: '',
-    pCondition: 'NEW',
-    pQuantity: '1',
-    category: '',
-    images: [],
-  };
+function selectClass() {
+  return 'w-full rounded-lg border border-[var(--hive-border)] bg-white px-3.5 py-2.5 text-[15px] text-[#17191c]';
 }
 
 export default function AdminRegisterShopWizard() {
@@ -73,7 +41,6 @@ export default function AdminRegisterShopWizard() {
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  // Step 1: owner
   const [ownerMode, setOwnerMode] = useState<'new' | 'existing'>('new');
   const [ownerAccountType, setOwnerAccountType] = useState<'email' | 'phone'>('email');
   const [ownerFullName, setOwnerFullName] = useState('');
@@ -84,8 +51,8 @@ export default function AdminRegisterShopWizard() {
   const [existingResults, setExistingResults] = useState<AdminUserSummary[]>([]);
   const [selectedExistingUser, setSelectedExistingUser] = useState<AdminUserSummary | null>(null);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+  const [createdUserId, setCreatedUserId] = useState<string | null>(null);
 
-  // Step 2: shop
   const [shopName, setShopName] = useState('');
   const [shopPhone, setShopPhone] = useState('');
   const [shopType, setShopType] = useState('');
@@ -97,45 +64,54 @@ export default function AdminRegisterShopWizard() {
   const [address, setAddress] = useState('');
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
+  const [countryChoice, setCountryChoice] = useState('Nigeria');
+  const [otherCountry, setOtherCountry] = useState('');
+  const [state, setState] = useState('');
+  const [lga, setLga] = useState('');
+  const [nigeriaLocations, setNigeriaLocations] = useState<NigeriaLocations | null>(null);
+  const [locationDataError, setLocationDataError] = useState<string | null>(null);
   const [operatingMode, setOperatingMode] = useState<'FIXED' | 'FLEXIBLE'>('FIXED');
   const [openingTime, setOpeningTime] = useState('');
   const [closingTime, setClosingTime] = useState('');
   const [shopImage, setShopImage] = useState<File | null>(null);
   const [shopBanner, setShopBanner] = useState<File | null>(null);
-
-  // Step 3: products
-  const [products, setProducts] = useState<DraftProduct[]>([]);
-  const [services, setServices] = useState<DraftService[]>([]);
-  const [serviceOutcomes, setServiceOutcomes] = useState<ProductOutcome[]>([]);
-
-  // Submission
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [createdUserId, setCreatedUserId] = useState<string | null>(null);
-  const [createdShopId, setCreatedShopId] = useState<string | null>(null);
-  const [createdShopName, setCreatedShopName] = useState<string | null>(null);
-  const [productOutcomes, setProductOutcomes] = useState<ProductOutcome[]>([]);
-  const [isDone, setIsDone] = useState(false);
 
   const categories = useMemo(
-    () => categoriesInput.split(',').map((c) => c.trim()).filter(Boolean),
+    () => categoriesInput.split(',').map((category) => category.trim()).filter(Boolean),
     [categoriesInput],
   );
+  const country = countryChoice === 'Other' ? otherCountry.trim() : countryChoice;
+  const nigeriaStateOptions = Object.keys(nigeriaLocations ?? {});
+  const nigeriaLgaOptions = nigeriaLocations?.[state] ?? [];
 
-  function to24hTimeToAmPm(time: string): string {
-    if (!time) return '';
-    const [hoursStr, minutesStr] = time.split(':');
-    let hours = parseInt(hoursStr, 10);
+  useEffect(() => {
+    let cancelled = false;
+    getNigeriaLocations()
+      .then((data) => {
+        if (!cancelled) setNigeriaLocations(data);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setLocationDataError(err instanceof Error ? err.message : 'Unable to load Nigerian location data.');
+        }
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  function toAmPmTime(time: string): string | undefined {
+    if (!time) return undefined;
+    const [hoursText, minutes] = time.split(':');
+    const hours = Number(hoursText);
     const period = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12 || 12;
-    return `${hours}:${minutesStr} ${period}`;
+    return `${hours % 12 || 12}:${minutes} ${period}`;
   }
 
   async function handleSearchExisting() {
     setIsSearchingUsers(true);
     setError(null);
     try {
-      const results = await searchUsers(existingQuery);
-      setExistingResults(results);
+      setExistingResults(await searchUsers(existingQuery.trim()));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not search users.');
     } finally {
@@ -146,40 +122,41 @@ export default function AdminRegisterShopWizard() {
   function validateStep(current: number): string | null {
     if (current === 0) {
       if (ownerMode === 'new') {
-        if (!ownerFullName.trim() || !ownerPassword.trim()) {
-          return 'Please fill in the owner\'s full name and an initial password.';
+        if (!ownerFullName.trim() || (!ownerPassword && !createdUserId)) {
+          return "Please fill in the owner's full name and an initial password.";
         }
         if (ownerAccountType === 'email' && !ownerEmail.trim()) {
-          return 'Please provide the owner\'s email address.';
+          return "Please provide the owner's email address.";
         }
         if (ownerAccountType === 'phone' && !ownerPhone.trim()) {
-          return 'Please provide the owner\'s phone number.';
+          return "Please provide the owner's phone number.";
         }
-        if (ownerPassword.length < 8) return 'Password must be at least 8 characters.';
-      } else if (!selectedExistingUser) {
+        if (!createdUserId && ownerPassword.length < 8) return 'Password must be at least 8 characters.';
+      } else if (!selectedExistingUser || selectedExistingUser.hasShop) {
         return 'Please search for and select an existing owner.';
       }
     }
+
     if (current === 1) {
       if (!shopName.trim() || !shopPhone.trim() || !shopType.trim()) {
         return 'Please fill in shop name, phone, and shop type.';
       }
-      if (!address.trim() || !latitude.trim() || !longitude.trim()) {
-        return 'Please provide the shop address and coordinates.';
+      if (!address.trim()) return 'Please enter the shop street, market, campus, or area address.';
+      if (!latitude.trim() || !longitude.trim()) return 'Please provide the shop GPS coordinates.';
+      const lat = Number(latitude);
+      const lon = Number(longitude);
+      if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lon) || lon < -180 || lon > 180) {
+        return 'Enter valid latitude and longitude coordinates.';
       }
-      if (Number.isNaN(Number(latitude)) || Number.isNaN(Number(longitude))) {
-        return 'Latitude and longitude must be numbers.';
+      if (!country || !state.trim() || !lga.trim()) {
+        return 'Please select or enter the shop country, state/region, and LGA/district.';
       }
-    }
-    if (current === 2) {
-      for (const product of products) {
-        if (!product.pName.trim() || !product.pDetail.trim() || !product.pAmount.trim() || !product.category.trim()) {
-          return 'Every product needs a name, description, price, and category (or remove it).';
+      if (country.toLowerCase() === 'nigeria') {
+        if (locationDataError || !nigeriaLocations) {
+          return locationDataError || 'Nigerian state and LGA data is still loading.';
         }
-      }
-      for (const service of services) {
-        if (!service.name.trim() || !service.description.trim() || !service.price.trim() || Number(service.price) <= 0) {
-          return 'Every service needs a name, description, and a price above 0 (or remove it).';
+        if (!nigeriaLocations[state]?.includes(lga)) {
+          return 'Choose an LGA listed under the selected Nigerian state.';
         }
       }
     }
@@ -193,102 +170,21 @@ export default function AdminRegisterShopWizard() {
       return;
     }
     setError(null);
-    setStep((s) => Math.min(s + 1, STEPS.length - 1));
-  }
-
-  function goBack() {
-    setError(null);
-    setStep((s) => Math.max(s - 1, 0));
-  }
-
-  function updateProduct(localId: string, patch: Partial<DraftProduct>) {
-    setProducts((list) => list.map((p) => (p.localId === localId ? { ...p, ...patch } : p)));
-  }
-
-  function removeProduct(localId: string) {
-    setProducts((list) => list.filter((p) => p.localId !== localId));
-  }
-
-  async function retryProduct(outcome: ProductOutcome) {
-    const draft = products.find((p) => p.localId === outcome.localId);
-    if (!draft || !createdShopId) return;
-    setProductOutcomes((list) =>
-      list.map((o) => (o.localId === outcome.localId ? { ...o, status: 'pending', message: undefined } : o)),
-    );
-    await submitSingleProduct(draft, createdShopId);
-  }
-
-  function updateService(localId: string, patch: Partial<DraftService>) {
-    setServices((list) => list.map((s) => (s.localId === localId ? { ...s, ...patch } : s)));
-  }
-
-  async function submitSingleService(draft: DraftService, shopId: string) {
-    try {
-      await createShopService(shopId, {
-        name: draft.name.trim(),
-        description: draft.description.trim(),
-        price: Number(draft.price),
-        duration: draft.duration.trim() || undefined,
-        availability: draft.availability.trim() || undefined,
-      });
-      setServiceOutcomes((list) =>
-        list.map((o) => (o.localId === draft.localId ? { ...o, status: 'success', message: undefined } : o)),
-      );
-    } catch (err) {
-      setServiceOutcomes((list) =>
-        list.map((o) =>
-          o.localId === draft.localId
-            ? { ...o, status: 'error', message: err instanceof ApiError ? err.message : 'Failed to create service.' }
-            : o,
-        ),
-      );
-    }
-  }
-
-  async function retryService(outcome: ProductOutcome) {
-    const draft = services.find((s) => s.localId === outcome.localId);
-    if (!draft || !createdShopId) return;
-    setServiceOutcomes((list) =>
-      list.map((o) => (o.localId === outcome.localId ? { ...o, status: 'pending', message: undefined } : o)),
-    );
-    await submitSingleService(draft, createdShopId);
-  }
-
-  async function submitSingleProduct(draft: DraftProduct, shopId: string) {
-    try {
-      const created = await createProduct({
-        pName: draft.pName.trim(),
-        pDetail: draft.pDetail.trim(),
-        pAmount: Number(draft.pAmount),
-        pDiscount: draft.pDiscount ? Number(draft.pDiscount) : undefined,
-        pCondition: draft.pCondition,
-        pQuantity: Number(draft.pQuantity || '1'),
-        category: draft.category.trim(),
-        shopId,
-      });
-      if (draft.images.length) {
-        await uploadProductImages(created.id, draft.images);
-      }
-      setProductOutcomes((list) =>
-        list.map((o) => (o.localId === draft.localId ? { ...o, status: 'success', message: undefined } : o)),
-      );
-    } catch (err) {
-      setProductOutcomes((list) =>
-        list.map((o) =>
-          o.localId === draft.localId
-            ? { ...o, status: 'error', message: err instanceof ApiError ? err.message : 'Failed to create product.' }
-            : o,
-        ),
-      );
-    }
+    setStep((current) => Math.min(current + 1, STEPS.length - 1));
   }
 
   async function handleSubmit() {
+    const validationError = validateStep(0) || validateStep(1);
+    if (validationError) {
+      setError(validationError);
+      setStep(validationError.includes('owner') || validationError.includes('Owner') ? 0 : 1);
+      return;
+    }
+
     setError(null);
     setIsSubmitting(true);
     try {
       let userId = selectedExistingUser?.id || createdUserId;
-
       if (!userId && ownerMode === 'new') {
         const user = await createUser({
           fullName: ownerFullName.trim(),
@@ -300,54 +196,31 @@ export default function AdminRegisterShopWizard() {
         setCreatedUserId(user.id);
         setOwnerPassword('');
       }
-
       if (!userId) throw new Error('No owner selected.');
 
-      let shopId = createdShopId;
-      if (!shopId) {
-        const shop = await createShop({
-          userId,
-          name: shopName.trim(),
-          phone: shopPhone.trim(),
-          slogan: slogan.trim() || undefined,
-          shopType: shopType.trim(),
-          categories,
-          university: university.trim() || undefined,
-          areaName: areaName.trim() || undefined,
-          website: website.trim() || undefined,
-          openingTime: to24hTimeToAmPm(openingTime) || undefined,
-          closingTime: to24hTimeToAmPm(closingTime) || undefined,
-          operatingMode,
-          address: address.trim(),
-          latitude: Number(latitude),
-          longitude: Number(longitude),
-          image: shopImage,
-          banner: shopBanner,
-        });
-        shopId = shop.id;
-        setCreatedShopId(shop.id);
-        setCreatedShopName(shop.name);
-      }
-
-      const initialOutcomes: ProductOutcome[] = products.map((p) => ({
-        localId: p.localId,
-        name: p.pName.trim() || 'Untitled product',
-        status: 'pending',
-      }));
-      setProductOutcomes(initialOutcomes);
-
-      for (const draft of products) {
-        await submitSingleProduct(draft, shopId);
-      }
-
-      setServiceOutcomes(
-        services.map((s) => ({ localId: s.localId, name: s.name.trim() || 'Untitled service', status: 'pending' as const })),
-      );
-      for (const draft of services) {
-        await submitSingleService(draft, shopId);
-      }
-
-      setIsDone(true);
+      const shop = await createShop({
+        userId,
+        name: shopName.trim(),
+        phone: shopPhone.trim(),
+        slogan: slogan.trim() || undefined,
+        shopType: shopType.trim(),
+        categories,
+        university: university.trim() || undefined,
+        areaName: areaName.trim() || undefined,
+        website: website.trim() || undefined,
+        openingTime: toAmPmTime(openingTime),
+        closingTime: toAmPmTime(closingTime),
+        operatingMode,
+        address: address.trim(),
+        latitude: Number(latitude),
+        longitude: Number(longitude),
+        country,
+        state: state.trim(),
+        lga: lga.trim(),
+        image: shopImage,
+        banner: shopBanner,
+      });
+      navigate(`/admin/shops/${encodeURIComponent(shop.id)}`, { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong while registering the shop.');
     } finally {
@@ -355,80 +228,86 @@ export default function AdminRegisterShopWizard() {
     }
   }
 
-  if (isDone) {
-    const successCount = productOutcomes.filter((o) => o.status === 'success').length;
-    const failedOutcomes = productOutcomes.filter((o) => o.status === 'error');
-    const serviceSuccess = serviceOutcomes.filter((o) => o.status === 'success').length;
-    const failedServices = serviceOutcomes.filter((o) => o.status === 'error');
-    const parts = [
-      productOutcomes.length ? `${successCount}/${productOutcomes.length} product(s)` : null,
-      serviceOutcomes.length ? `${serviceSuccess}/${serviceOutcomes.length} service(s)` : null,
-    ].filter(Boolean);
-    return (
-      <PageShell title="Shop registered" maxWidth="max-w-xl">
-        <SuccessBanner
-          message={parts.length === 0
-            ? `"${createdShopName}" was created with no products or services. They can be added later.`
-            : `"${createdShopName}" was created with ${parts.join(' and ')} added successfully.`}
-        />
-        {failedServices.length > 0 && (
-          <div className="mb-4 space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm font-semibold text-amber-900">
-              {failedServices.length} service(s) failed to save. You can retry them individually:
-            </p>
-            {failedServices.map((outcome) => (
-              <div key={outcome.localId} className="flex items-center justify-between gap-3 text-sm">
-                <span>{outcome.name} — {outcome.message}</span>
-                <button
-                  type="button"
-                  onClick={() => retryService(outcome)}
-                  className="font-semibold text-[#008100] hover:underline"
-                >
-                  Retry
-                </button>
-              </div>
-            ))}
-          </div>
-        )}        {failedOutcomes.length > 0 && (
-          <div className="mb-4 space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm font-semibold text-amber-900">
-              {failedOutcomes.length} product(s) failed to save. You can retry them individually:
-            </p>
-            {failedOutcomes.map((outcome) => (
-              <div key={outcome.localId} className="flex items-center justify-between gap-3 text-sm">
-                <span>{outcome.name} — {outcome.message}</span>
-                <button
-                  type="button"
-                  onClick={() => retryProduct(outcome)}
-                  className="font-semibold text-[#008100] hover:underline"
-                >
-                  Retry
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="flex gap-3">
-          <PrimaryButton type="button" onClick={() => navigate('/admin')}>
-            Back to dashboard
-          </PrimaryButton>
-          <SecondaryButton type="button" onClick={() => window.location.reload()}>
-            Register another shop
-          </SecondaryButton>
+  const locationFields = (
+    <>
+      <div>
+        <FieldLabel>Country</FieldLabel>
+        <select
+          className={selectClass()}
+          value={countryChoice}
+          onChange={(event) => {
+            setCountryChoice(event.target.value);
+            setOtherCountry('');
+            setState('');
+            setLga('');
+          }}
+        >
+          {COUNTRY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+      </div>
+      {countryChoice === 'Other' && (
+        <div>
+          <FieldLabel>Country name</FieldLabel>
+          <TextInput value={otherCountry} onChange={(event) => setOtherCountry(event.target.value)} />
         </div>
-      </PageShell>
-    );
-  }
+      )}
+      {country.toLowerCase() === 'nigeria' ? (
+        <>
+          {locationDataError && <p className="text-sm text-red-700">{locationDataError}</p>}
+          <div>
+            <FieldLabel>State / region</FieldLabel>
+            <select
+              className={selectClass()}
+              value={state}
+              disabled={!nigeriaLocations}
+              onChange={(event) => {
+                setState(event.target.value);
+                setLga('');
+              }}
+            >
+              <option value="">Select a state or FCT</option>
+              {nigeriaStateOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          </div>
+          <div>
+            <FieldLabel>LGA</FieldLabel>
+            <select
+              className={selectClass()}
+              value={lga}
+              disabled={!state || !nigeriaLocations}
+              onChange={(event) => setLga(event.target.value)}
+            >
+              <option value="">Select a Local Government Area</option>
+              {nigeriaLgaOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          </div>
+        </>
+      ) : (
+        <>
+          <div>
+            <FieldLabel>State / region</FieldLabel>
+            <TextInput value={state} onChange={(event) => { setState(event.target.value); setLga(''); }} />
+          </div>
+          <div>
+            <FieldLabel>LGA / district</FieldLabel>
+            <TextInput value={lga} onChange={(event) => setLga(event.target.value)} />
+          </div>
+        </>
+      )}
+    </>
+  );
 
   return (
-    <PageShell title="Register a shop" subtitle="Walk the owner through each step on your device." maxWidth="max-w-xl">
+    <PageShell
+      title="Register a shop"
+      subtitle="Register the shop and its location first. Products and services can be added from its management page."
+      maxWidth="max-w-xl"
+    >
       <div className="mb-6 flex gap-1.5">
         {STEPS.map((label, index) => (
           <div key={label} className="flex-1">
             <div className={`h-1.5 rounded-full ${index <= step ? 'bg-[#008100]' : 'bg-gray-200'}`} />
-            <p className={`mt-1 text-[11px] font-medium ${index === step ? 'text-[#008100]' : 'text-gray-400'}`}>
-              {label}
-            </p>
+            <p className={`mt-1 text-[11px] font-medium ${index === step ? 'text-[#008100]' : 'text-gray-400'}`}>{label}</p>
           </div>
         ))}
       </div>
@@ -438,20 +317,17 @@ export default function AdminRegisterShopWizard() {
       {step === 0 && (
         <div className="space-y-4">
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setOwnerMode('new')}
-              className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${ownerMode === 'new' ? 'border-[#008100] bg-[#e8f5e9] text-[#008100]' : 'border-[var(--hive-border)] text-gray-600'}`}
-            >
-              New owner
-            </button>
-            <button
-              type="button"
-              onClick={() => setOwnerMode('existing')}
-              className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${ownerMode === 'existing' ? 'border-[#008100] bg-[#e8f5e9] text-[#008100]' : 'border-[var(--hive-border)] text-gray-600'}`}
-            >
-              Existing user
-            </button>
+            {(['new', 'existing'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setOwnerMode(mode)}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${ownerMode === mode
+                  ? 'border-[#008100] bg-[#e8f5e9] text-[#008100]' : 'border-[var(--hive-border)] text-gray-600'}`}
+              >
+                {mode === 'new' ? 'New owner' : 'Existing user'}
+              </button>
+            ))}
           </div>
 
           {ownerMode === 'new' ? (
@@ -462,47 +338,38 @@ export default function AdminRegisterShopWizard() {
                     key={type}
                     type="button"
                     onClick={() => setOwnerAccountType(type)}
-                    className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${ownerAccountType === type ? 'border-[#008100] bg-[#e8f5e9] text-[#008100]' : 'border-[var(--hive-border)] text-gray-600'}`}
+                    className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${ownerAccountType === type
+                      ? 'border-[#008100] bg-[#e8f5e9] text-[#008100]' : 'border-[var(--hive-border)] text-gray-600'}`}
                   >
                     {type === 'email' ? 'Email account' : 'Phone-only account'}
                   </button>
                 ))}
               </div>
-              <div>
-                <FieldLabel>Full name</FieldLabel>
-                <TextInput value={ownerFullName} onChange={(e) => setOwnerFullName(e.target.value)} />
-              </div>
+              <div><FieldLabel>Full name</FieldLabel><TextInput value={ownerFullName} onChange={(event) => setOwnerFullName(event.target.value)} /></div>
               {ownerAccountType === 'email' && (
-                <div>
-                  <FieldLabel>Email</FieldLabel>
-                  <TextInput type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} />
-                </div>
+                <div><FieldLabel>Email</FieldLabel><TextInput type="email" value={ownerEmail} onChange={(event) => setOwnerEmail(event.target.value)} /></div>
               )}
               <div>
                 <FieldLabel>{ownerAccountType === 'phone' ? 'Owner phone number' : 'Phone (optional)'}</FieldLabel>
-                <TextInput type="tel" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} placeholder="+2348012345678 or 08012345678" />
+                <TextInput type="tel" value={ownerPhone} onChange={(event) => setOwnerPhone(event.target.value)} placeholder="+2348012345678 or 08012345678" />
               </div>
               <div>
                 <FieldLabel>Temporary initial password (min. 8 characters)</FieldLabel>
-                <TextInput
-                  type="password"
-                  value={ownerPassword}
-                  onChange={(e) => setOwnerPassword(e.target.value)}
-                  autoComplete="new-password"
-                  placeholder="Communicate privately to the owner"
-                />
-                <p className="mt-1 text-xs text-gray-500">This password is never shown again after registration. Share it with the owner privately.</p>
+                <TextInput type="password" value={ownerPassword} onChange={(event) => setOwnerPassword(event.target.value)} autoComplete="new-password" />
+                <p className="mt-1 text-xs text-gray-500">Communicate this password to the owner privately.</p>
               </div>
             </>
           ) : (
             <>
               <div className="flex gap-2">
                 <TextInput
+                  aria-label="Search existing owners"
                   placeholder="Search by name or email"
                   value={existingQuery}
-                  onChange={(e) => setExistingQuery(e.target.value)}
+                  onChange={(event) => setExistingQuery(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter') void handleSearchExisting(); }}
                 />
-                <SecondaryButton type="button" className="w-auto px-4" onClick={handleSearchExisting} disabled={isSearchingUsers}>
+                <SecondaryButton type="button" className="w-auto px-4" onClick={() => void handleSearchExisting()} disabled={isSearchingUsers}>
                   Search
                 </SecondaryButton>
               </div>
@@ -511,11 +378,14 @@ export default function AdminRegisterShopWizard() {
                   <button
                     key={user.id}
                     type="button"
+                    disabled={user.hasShop}
                     onClick={() => setSelectedExistingUser(user)}
-                    className={`w-full rounded-lg border px-3 py-2 text-left text-sm ${selectedExistingUser?.id === user.id ? 'border-[#008100] bg-[#e8f5e9]' : 'border-[var(--hive-border)]'}`}
+                    className={`w-full rounded-lg border px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60 ${selectedExistingUser?.id === user.id
+                      ? 'border-[#008100] bg-[#e8f5e9]' : 'border-[var(--hive-border)]'}`}
                   >
                     <p className="font-semibold">{user.fullName}</p>
                     <p className="text-gray-500">{user.email || user.phone || 'Phone-only account'}</p>
+                    {user.hasShop && <p className="text-xs text-amber-700">This owner already has a shop.</p>}
                   </button>
                 ))}
               </div>
@@ -526,218 +396,60 @@ export default function AdminRegisterShopWizard() {
 
       {step === 1 && (
         <div className="space-y-4">
-          <div>
-            <FieldLabel>Shop name</FieldLabel>
-            <TextInput value={shopName} onChange={(e) => setShopName(e.target.value)} />
-          </div>
-          <div>
-            <FieldLabel>Shop phone</FieldLabel>
-            <TextInput value={shopPhone} onChange={(e) => setShopPhone(e.target.value)} />
-          </div>
-          <div>
-            <FieldLabel>Shop type</FieldLabel>
-            <TextInput value={shopType} onChange={(e) => setShopType(e.target.value)} placeholder="e.g. Fashion, Food" />
-          </div>
-          <div>
-            <FieldLabel>Categories (comma-separated)</FieldLabel>
-            <TextInput value={categoriesInput} onChange={(e) => setCategoriesInput(e.target.value)} />
-          </div>
-          <div>
-            <FieldLabel>Slogan (optional)</FieldLabel>
-            <TextInput value={slogan} onChange={(e) => setSlogan(e.target.value)} />
-          </div>
+          <div><FieldLabel>Shop name</FieldLabel><TextInput value={shopName} onChange={(event) => setShopName(event.target.value)} /></div>
+          <div><FieldLabel>Shop phone</FieldLabel><TextInput value={shopPhone} onChange={(event) => setShopPhone(event.target.value)} /></div>
+          <div><FieldLabel>Shop type</FieldLabel><TextInput value={shopType} onChange={(event) => setShopType(event.target.value)} placeholder="e.g. Fashion, Food" /></div>
+          <div><FieldLabel>Categories (comma-separated, optional)</FieldLabel><TextInput value={categoriesInput} onChange={(event) => setCategoriesInput(event.target.value)} /></div>
+          <div><FieldLabel>Slogan (optional)</FieldLabel><TextInput value={slogan} onChange={(event) => setSlogan(event.target.value)} /></div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <FieldLabel>University (optional)</FieldLabel>
-              <TextInput value={university} onChange={(e) => setUniversity(e.target.value)} />
-            </div>
-            <div>
-              <FieldLabel>Area (optional)</FieldLabel>
-              <TextInput value={areaName} onChange={(e) => setAreaName(e.target.value)} />
-            </div>
+            <div><FieldLabel>University / region (optional)</FieldLabel><TextInput value={university} onChange={(event) => setUniversity(event.target.value)} /></div>
+            <div><FieldLabel>Area name (optional)</FieldLabel><TextInput value={areaName} onChange={(event) => setAreaName(event.target.value)} /></div>
           </div>
-          <div>
-            <FieldLabel>Website (optional)</FieldLabel>
-            <TextInput value={website} onChange={(e) => setWebsite(e.target.value)} />
-          </div>
-          <div>
-            <FieldLabel>Address</FieldLabel>
-            <TextInput value={address} onChange={(e) => setAddress(e.target.value)} />
-          </div>
+          <div><FieldLabel>Website (optional)</FieldLabel><TextInput value={website} onChange={(event) => setWebsite(event.target.value)} /></div>
+          <div><FieldLabel>Specific location / address</FieldLabel><TextInput value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Street, neighbourhood, market, campus, or shopping complex" /></div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <FieldLabel>Latitude</FieldLabel>
-              <TextInput value={latitude} onChange={(e) => setLatitude(e.target.value)} placeholder="6.5244" />
-            </div>
-            <div>
-              <FieldLabel>Longitude</FieldLabel>
-              <TextInput value={longitude} onChange={(e) => setLongitude(e.target.value)} placeholder="3.3792" />
-            </div>
+            <div><FieldLabel>Latitude</FieldLabel><TextInput inputMode="decimal" value={latitude} onChange={(event) => setLatitude(event.target.value)} /></div>
+            <div><FieldLabel>Longitude</FieldLabel><TextInput inputMode="decimal" value={longitude} onChange={(event) => setLongitude(event.target.value)} /></div>
           </div>
           <SecondaryButton
             type="button"
             onClick={() => {
-              if (!navigator.geolocation) return;
-              navigator.geolocation.getCurrentPosition((pos) => {
-                setLatitude(String(pos.coords.latitude));
-                setLongitude(String(pos.coords.longitude));
-              });
+              if (!navigator.geolocation) {
+                setError('This browser does not support location detection. Enter GPS coordinates manually.');
+                return;
+              }
+              navigator.geolocation.getCurrentPosition(
+                (position) => {
+                  setLatitude(String(position.coords.latitude));
+                  setLongitude(String(position.coords.longitude));
+                  setError(null);
+                },
+                () => setError('Unable to detect GPS coordinates. Enter them manually or allow location access.'),
+              );
             }}
           >
-            Use my current location
+            Use my current GPS location
           </SecondaryButton>
+          {locationFields}
           <div>
             <FieldLabel>Operating mode</FieldLabel>
-            <select
-              value={operatingMode}
-              onChange={(e) => setOperatingMode(e.target.value as 'FIXED' | 'FLEXIBLE')}
-              className="w-full rounded-lg border border-[var(--hive-border)] px-3.5 py-2.5 text-[15px]"
-            >
+            <select className={selectClass()} value={operatingMode} onChange={(event) => setOperatingMode(event.target.value as 'FIXED' | 'FLEXIBLE')}>
               <option value="FIXED">Fixed hours</option>
               <option value="FLEXIBLE">Flexible hours</option>
             </select>
           </div>
           {operatingMode === 'FIXED' && (
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <FieldLabel>Opening time</FieldLabel>
-                <TextInput type="time" value={openingTime} onChange={(e) => setOpeningTime(e.target.value)} />
-              </div>
-              <div>
-                <FieldLabel>Closing time</FieldLabel>
-                <TextInput type="time" value={closingTime} onChange={(e) => setClosingTime(e.target.value)} />
-              </div>
+              <div><FieldLabel>Opening time</FieldLabel><TextInput type="time" value={openingTime} onChange={(event) => setOpeningTime(event.target.value)} /></div>
+              <div><FieldLabel>Closing time</FieldLabel><TextInput type="time" value={closingTime} onChange={(event) => setClosingTime(event.target.value)} /></div>
             </div>
           )}
-          <div>
-            <FieldLabel>Shop logo/image (optional)</FieldLabel>
-            <input type="file" accept="image/*" onChange={(e) => setShopImage(e.target.files?.[0] || null)} />
-          </div>
-          <div>
-            <FieldLabel>Shop banner (optional)</FieldLabel>
-            <input type="file" accept="image/*" onChange={(e) => setShopBanner(e.target.files?.[0] || null)} />
-          </div>
+          <div><FieldLabel>Shop image (optional)</FieldLabel><input type="file" accept="image/*" onChange={(event) => setShopImage(event.target.files?.[0] || null)} /></div>
+          <div><FieldLabel>Shop banner (optional)</FieldLabel><input type="file" accept="image/*" onChange={(event) => setShopBanner(event.target.files?.[0] || null)} /></div>
         </div>
       )}
 
       {step === 2 && (
-        <div className="space-y-6">
-          <div>
-            <h2 className="font-semibold text-[#17191c]">Products (Optional)</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Add products now, or add them later from the shop dashboard.
-            </p>
-          </div>
-          {products.map((product, index) => (
-            <div key={product.localId} className="space-y-3 rounded-lg border border-[var(--hive-border)] p-4">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold">Product {index + 1}</p>
-                <button type="button" onClick={() => removeProduct(product.localId)} className="text-sm text-red-600">
-                  Remove
-                </button>
-              </div>
-              <div>
-                <FieldLabel>Name</FieldLabel>
-                <TextInput value={product.pName} onChange={(e) => updateProduct(product.localId, { pName: e.target.value })} />
-              </div>
-              <div>
-                <FieldLabel>Description</FieldLabel>
-                <TextInput value={product.pDetail} onChange={(e) => updateProduct(product.localId, { pDetail: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <FieldLabel>Price (₦)</FieldLabel>
-                  <TextInput value={product.pAmount} onChange={(e) => updateProduct(product.localId, { pAmount: e.target.value })} />
-                </div>
-                <div>
-                  <FieldLabel>Discount price (optional)</FieldLabel>
-                  <TextInput value={product.pDiscount} onChange={(e) => updateProduct(product.localId, { pDiscount: e.target.value })} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <FieldLabel>Condition</FieldLabel>
-                  <select
-                    value={product.pCondition}
-                    onChange={(e) => updateProduct(product.localId, { pCondition: e.target.value as 'NEW' | 'USED' })}
-                    className="w-full rounded-lg border border-[var(--hive-border)] px-3.5 py-2.5 text-[15px]"
-                  >
-                    <option value="NEW">New</option>
-                    <option value="USED">Used</option>
-                  </select>
-                </div>
-                <div>
-                  <FieldLabel>Quantity</FieldLabel>
-                  <TextInput value={product.pQuantity} onChange={(e) => updateProduct(product.localId, { pQuantity: e.target.value })} />
-                </div>
-              </div>
-              <div>
-                <FieldLabel>Category</FieldLabel>
-                <TextInput value={product.category} onChange={(e) => updateProduct(product.localId, { category: e.target.value })} />
-              </div>
-              <div>
-                <FieldLabel>Images (optional)</FieldLabel>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => updateProduct(product.localId, { images: Array.from(e.target.files || []) })}
-                />
-              </div>
-            </div>
-          ))}
-          <SecondaryButton type="button" onClick={() => setProducts((list) => [...list, emptyProduct()])}>
-            + Add product
-          </SecondaryButton>
-          <div className="border-t border-[var(--hive-border)] pt-6">
-            <h2 className="font-semibold text-[#17191c]">Services (Optional)</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Add services if the shop provides services. You can also add them later.
-            </p>
-          </div>
-          {services.map((service, index) => (
-            <div key={service.localId} className="space-y-3 rounded-lg border border-[var(--hive-border)] p-4">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold">Service {index + 1}</p>
-                <button
-                  type="button"
-                  onClick={() => setServices((list) => list.filter((s) => s.localId !== service.localId))}
-                  className="text-sm text-red-600"
-                >
-                  Remove
-                </button>
-              </div>
-              <div>
-                <FieldLabel>Service name</FieldLabel>
-                <TextInput value={service.name} onChange={(e) => updateService(service.localId, { name: e.target.value })} />
-              </div>
-              <div>
-                <FieldLabel>Description</FieldLabel>
-                <TextInput value={service.description} onChange={(e) => updateService(service.localId, { description: e.target.value })} />
-              </div>
-              <div>
-                <FieldLabel>Price (₦)</FieldLabel>
-                <TextInput value={service.price} onChange={(e) => updateService(service.localId, { price: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <FieldLabel>Duration (optional)</FieldLabel>
-                  <TextInput value={service.duration} onChange={(e) => updateService(service.localId, { duration: e.target.value })} />
-                </div>
-                <div>
-                  <FieldLabel>Availability (optional)</FieldLabel>
-                  <TextInput value={service.availability} onChange={(e) => updateService(service.localId, { availability: e.target.value })} />
-                </div>
-              </div>
-            </div>
-          ))}
-          <SecondaryButton type="button" onClick={() => setServices((list) => [...list, emptyService()])}>
-            + Add Service
-          </SecondaryButton>
-        </div>
-      )}
-
-      {step === 3 && (
         <div className="space-y-4 text-sm">
           <div className="rounded-lg bg-[var(--hive-background)] p-4">
             <p className="font-semibold">Owner</p>
@@ -749,56 +461,23 @@ export default function AdminRegisterShopWizard() {
             <p className="font-semibold">Shop</p>
             <p>{shopName} — {shopType}</p>
             <p>{address}</p>
+            <p>{[areaName, lga, state, country].filter(Boolean).join(', ')}</p>
+            <p className="mt-2 text-gray-600">The shop will be registered without products or services. You can manage those separately after registration.</p>
           </div>
-          <div className="rounded-lg bg-[var(--hive-background)] p-4">
-            <p className="font-semibold">Products (Optional) ({products.length})</p>
-            {products.length ? (
-              <ul className="list-disc pl-5">
-                {products.map((p) => (
-                  <li key={p.localId}>{p.pName || 'Untitled'} — ₦{p.pAmount || 0}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-1 text-gray-600">No products added. You can add them later from the shop dashboard.</p>
-            )}
-          </div>
-          <div className="rounded-lg bg-[var(--hive-background)] p-4">
-            <p className="font-semibold">Services (Optional) ({services.length})</p>
-            {services.length ? (
-              <ul className="list-disc pl-5">
-                {services.map((s) => (
-                  <li key={s.localId}>{s.name || 'Untitled'} — ₦{s.price || 0}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-1 text-gray-600">No services added. You can add them later.</p>
-            )}
-          </div>
-          {productOutcomes.length > 0 && (
-            <div className="space-y-1">
-              {productOutcomes.map((o) => (
-                <p key={o.localId}>
-                  {o.name}: {o.status === 'pending' ? 'Saving…' : o.status === 'success' ? 'Saved' : `Failed: ${o.message}`}
-                </p>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
       <div className="mt-6 flex gap-3">
         {step > 0 && (
-          <SecondaryButton type="button" onClick={goBack} disabled={isSubmitting}>
+          <SecondaryButton type="button" onClick={() => { setError(null); setStep((current) => current - 1); }} disabled={isSubmitting}>
             Back
           </SecondaryButton>
         )}
         {step < STEPS.length - 1 ? (
-          <PrimaryButton type="button" onClick={goNext}>
-            Continue
-          </PrimaryButton>
+          <PrimaryButton type="button" onClick={goNext}>Continue</PrimaryButton>
         ) : (
-          <PrimaryButton type="button" onClick={handleSubmit} isLoading={isSubmitting}>
-            Submit registration
+          <PrimaryButton type="button" onClick={() => void handleSubmit()} isLoading={isSubmitting}>
+            Register shop
           </PrimaryButton>
         )}
       </div>

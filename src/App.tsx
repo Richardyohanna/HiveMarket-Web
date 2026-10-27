@@ -15,6 +15,7 @@ import DeleteAccountPage from './pages/DeleteAccountPage';
 import DeleteAccountConfirmPage from './pages/DeleteAccountConfirmPage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminRegisterShopWizard from './pages/admin/AdminRegisterShopWizard';
+import AdminShopManagementPage from './pages/admin/AdminShopManagementPage';
 import { API_BASE_URL } from './lib/config';
 
 const WEB_BASE_URL = 'https://hivemarket.ng';
@@ -86,6 +87,9 @@ function getRouteInfo(pathname: string) {
   }
   if (segments[0] === 'admin' && segments[1] === 'register-shop') {
     return { type: 'admin-register-shop', id: null };
+  }
+  if (segments[0] === 'admin' && segments[1] === 'shops' && segments[2]) {
+    return { type: 'admin-shop', id: segments[2] };
   }
   if (segments[0] === 'admin') {
     return { type: 'admin', id: null, section: segments[1] || 'overview' };
@@ -215,6 +219,12 @@ function App() {
       return (
         <RequireAdmin>
           <AdminRegisterShopWizard />
+        </RequireAdmin>
+      );
+    case 'admin-shop':
+      return (
+        <RequireAdmin>
+          <AdminShopManagementPage shopId={route.id ?? ''} />
         </RequireAdmin>
       );
     default:
