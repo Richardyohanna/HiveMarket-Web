@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 const app = express();
 const PORT = process.env.PORT || 4173;
 const WEB_BASE_URL = 'https://hivemarket.ng';
-const API_BASE_URL = 'https://api.hivemarket.ng';
+const API_BASE_URL = (process.env.API_BASE_URL || 'https://api.hivemarket.ng').replace(/\/$/, '');
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distDir = path.join(__dirname, 'dist');

@@ -418,7 +418,7 @@ export default function DownloadCta() {
                 <img
                   src={androidIcon}
                   alt="Android icon"
-                  className="relative z-10 brightness-0"
+                  className="relative z-10"
                 />
 
                 <span className="relative z-10">

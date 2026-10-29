@@ -37,7 +37,13 @@ type SelectableListing = AdminShopProduct | AdminShopService;
 const fieldClass = 'w-full rounded-lg border border-[var(--hive-border)] bg-white px-3.5 py-2.5 text-[15px] text-[#17191c]';
 const cardClass = 'rounded-xl border border-[var(--hive-border)] bg-white p-5';
 
-export default function ShopManagementPage() {
+export default function ShopManagementPage({
+  initialShopId,
+  returnToDashboard = false,
+}: {
+  initialShopId?: string;
+  returnToDashboard?: boolean;
+}) {
   const { navigate } = useRouter();
   const [shops, setShops] = useState<OwnedShopSummary[]>([]);
   const [shopId, setShopId] = useState('');
@@ -62,9 +68,11 @@ export default function ShopManagementPage() {
       .then((ownedShops) => {
         if (cancelled) return;
         setShops(ownedShops);
-        const firstShopId = ownedShops[0]?.id || '';
-        if (firstShopId) setListingsLoading(true);
-        setShopId(firstShopId);
+        const selectedShopId = ownedShops.find((shop) => shop.id === initialShopId)?.id
+          || ownedShops[0]?.id
+          || '';
+        if (selectedShopId) setListingsLoading(true);
+        setShopId(selectedShopId);
       })
       .catch((loadError: unknown) => {
         if (!cancelled) {
@@ -75,7 +83,7 @@ export default function ShopManagementPage() {
         if (!cancelled) setShopsLoading(false);
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [initialShopId]);
 
   useEffect(() => {
     if (!shopId) return;
@@ -261,8 +269,8 @@ export default function ShopManagementPage() {
   return (
     <main className="min-h-screen bg-[var(--hive-background)] px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-5xl">
-        <button type="button" onClick={() => navigate('/account')} className="mb-5 flex items-center gap-2 text-sm font-semibold text-[#008100]">
-          <ArrowLeft size={18} /> Your account
+        <button type="button" onClick={() => navigate(returnToDashboard ? '/shop-owner/dashboard' : '/account')} className="mb-5 flex items-center gap-2 text-sm font-semibold text-[#008100]">
+          <ArrowLeft size={18} /> {returnToDashboard ? 'Shop owner dashboard' : 'Your account'}
         </button>
         <header className="mb-6">
           <h1 className="text-2xl font-bold text-[#17191c]">Manage your listings</h1>

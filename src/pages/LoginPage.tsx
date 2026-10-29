@@ -14,7 +14,7 @@ export default function LoginPage() {
 
   const redirectTarget = (() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('redirect') || '/account';
+    return params.get('redirect') || '/shopping';
   })();
 
   async function handleSubmit(event: FormEvent) {

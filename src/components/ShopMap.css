@@ -1,0 +1,83 @@
+.hive-map {
+  min-height: 20rem;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 0.75rem;
+}
+
+.hive-map-marker-shell {
+  background: transparent;
+  border: 0;
+}
+
+.hive-map-marker {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border: 3px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 30%);
+  transform: rotate(-45deg);
+}
+
+.hive-map-marker-shop {
+  background: #008100;
+}
+
+.hive-map-popup {
+  display: flex;
+  min-width: 11rem;
+  flex-direction: column;
+  gap: 0.35rem;
+  font: inherit;
+}
+
+.hive-map-popup-image {
+  width: 100%;
+  height: 5rem;
+  border-radius: 0.5rem;
+  object-fit: cover;
+}
+
+.hive-map-popup-status {
+  width: fit-content;
+  border-radius: 9999px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.hive-map-popup-status-open {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.hive-map-popup-status-closed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.hive-map-popup-status-unknown {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.hive-map-popup button {
+  margin-top: 0.25rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: #008100;
+  padding: 0.45rem 0.65rem;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.hive-map-popup button:hover {
+  background: #006d24;
+}
+
+.hive-map-marker-user {
+  border-radius: 50%;
+  background: #2563eb;
+}

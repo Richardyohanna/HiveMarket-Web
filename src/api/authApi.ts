@@ -7,6 +7,8 @@ export type MeResponse = {
   fullName: string;
   isAdmin: boolean;
   mustChangePassword: boolean;
+  phoneVerified?: boolean;
+  emailAvailable?: boolean;
 };
 
 type TokenPair = { token: string; refreshToken: string; mustChangePassword?: boolean };
