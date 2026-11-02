@@ -165,6 +165,28 @@ export default function AccountPage() {
           Start Shopping
         </a>
 
+        <a
+          href="/shopping/saved-gallery"
+          onClick={(event) => {
+            event.preventDefault();
+            navigate('/shopping/saved-gallery');
+          }}
+          className="block rounded-lg border border-[var(--hive-border)] px-4 py-2.5 text-center text-[15px] font-semibold text-[#17191c] hover:bg-[var(--hive-background)]"
+        >
+          Saved Gallery images
+        </a>
+
+        <a
+          href="/shopping/saved-products"
+          onClick={(event) => {
+            event.preventDefault();
+            navigate('/shopping/saved-products');
+          }}
+          className="block rounded-lg border border-[var(--hive-border)] px-4 py-2.5 text-center text-[15px] font-semibold text-[#17191c] hover:bg-[var(--hive-background)]"
+        >
+          Saved products
+        </a>
+
         <div className="rounded-lg border border-[var(--hive-border)] bg-[var(--hive-background)] p-4">
           <p className="text-sm text-[#4b5158]">Full name</p>
           <p className="font-semibold text-[#17191c]">{profile?.full_name || user?.fullName || '—'}</p>

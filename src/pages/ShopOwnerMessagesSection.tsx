@@ -113,21 +113,29 @@ export default function ShopOwnerMessagesSection({ shopId }: { shopId: string })
   }, [shopId]);
 
   useEffect(() => {
-    // Reset scroll state whenever a conversation is opened
-    stickToBottomRef.current = true;
-    forceBottomRef.current = true;
-    pendingRestoreRef.current = null;
-    loadingOlderRef.current = false;
-    prevLastKeyRef.current = '';
-    setVisibleCount(PAGE_SIZE);
-    setNewWhileAway(0);
-    setShowJumpButton(false);
-    setMessages([]);
-    setAttachment(null);
-    if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+    let cancelled = false;
+
+    // Reset scroll state whenever a conversation is opened.
+    // Schedule the UI reset asynchronously to avoid direct setState calls in an effect body.
+    queueMicrotask(() => {
+      if (cancelled) return;
+      stickToBottomRef.current = true;
+      forceBottomRef.current = true;
+      pendingRestoreRef.current = null;
+      loadingOlderRef.current = false;
+      prevLastKeyRef.current = '';
+      setVisibleCount(PAGE_SIZE);
+      setNewWhileAway(0);
+      setShowJumpButton(false);
+      setMessages([]);
+      setAttachment(null);
+      if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+    });
 
     const conversation = selectedConversationRef.current;
-    if (!selectedId || !conversation) return;
+    if (!selectedId || !conversation) {
+      return () => { cancelled = true; };
+    }
 
     // On desktop, put the cursor in the message box so the user can type straight away.
     // Skipped on touch devices so the keyboard doesn't pop up unasked.
@@ -136,7 +144,6 @@ export default function ShopOwnerMessagesSection({ shopId }: { shopId: string })
     }
 
     const activeConversation = conversation;
-    let cancelled = false;
     async function loadMessages() {
       setLoadingMessages(true);
       setError(null);

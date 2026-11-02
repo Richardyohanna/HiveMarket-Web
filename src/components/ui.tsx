@@ -22,8 +22,8 @@ export function PageShell({ title, subtitle, children, maxWidth = 'max-w-md' }: 
   );
 }
 
-export function FieldLabel({ children }: { children: ReactNode }) {
-  return <label className="mb-1.5 block text-sm font-medium text-[#17191c]">{children}</label>;
+export function FieldLabel({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) {
+  return <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-medium text-[#17191c]">{children}</label>;
 }
 
 export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {

@@ -10,6 +10,7 @@ import PointerExperience from './components/PointerExperience';
 import { useRouter } from './lib/router';
 import { RequireAdmin, RequireAuth } from './components/RouteGuards';
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 import AccountPage from './pages/AccountPage';
 import PasswordChangePage from './pages/PasswordChangePage';
 import DeleteAccountPage from './pages/DeleteAccountPage';
@@ -20,6 +21,8 @@ import AdminShopManagementPage from './pages/admin/AdminShopManagementPage';
 import ShopManagementPage from './pages/ShopManagementPage';
 import ShopOwnerDashboardPage from './pages/ShopOwnerDashboardPage';
 import ShoppingPage from './pages/ShoppingPage';
+import GalleryFeedPage from './pages/GalleryFeedPage';
+import SavedGalleryPage from './pages/SavedGalleryPage';
 import ShareActions from './components/ShareActions';
 import { API_BASE_URL } from './lib/config';
 import { getProductShareUrl, getShopShareUrl, getShareUrl } from './utils/shareLinks';
@@ -97,8 +100,12 @@ function getRouteInfo(pathname: string) {
     return { type: 'profile', id: segments[1] };
   }
   if (segments[0] === 'login') return { type: 'login', id: null };
+  if (segments[0] === 'register') return { type: 'register', id: null };
   if (segments[0] === 'account') return { type: 'account', id: null };
   if (segments[0] === 'shopping') {
+    if (segments[1] === 'saved-gallery') {
+      return { type: 'saved-gallery', id: null };
+    }
     if (segments[1] === 'shop' && segments[2]) {
       return { type: 'shopping-shop', id: segments[2] };
     }
@@ -260,6 +267,8 @@ function App() {
       return <LandingPage />;
     case 'login':
       return <LoginPage />;
+    case 'register':
+      return <RegisterPage />;
     case 'account':
       return (
         <RequireAuth>
@@ -267,9 +276,22 @@ function App() {
         </RequireAuth>
       );
     case 'shopping':
+      if (route.section === 'gallery') {
+        return (
+          <RequireAuth>
+            <GalleryFeedPage />
+          </RequireAuth>
+        );
+      }
       return (
         <RequireAuth>
           <ShoppingPage key={route.section || 'home'} section={route.section || 'home'} />
+        </RequireAuth>
+      );
+    case 'saved-gallery':
+      return (
+        <RequireAuth>
+          <SavedGalleryPage />
         </RequireAuth>
       );
     case 'shopping-shop':

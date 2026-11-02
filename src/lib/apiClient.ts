@@ -28,20 +28,16 @@ async function doRefresh(): Promise<boolean> {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return false;
 
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    });
-    if (!response.ok) return false;
-    const data = await response.json();
-    if (!data?.token) return false;
-    setTokens(data.token, data.refreshToken || refreshToken);
-    return true;
-  } catch {
-    return false;
-  }
+  const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken }),
+  });
+  if (!response.ok) return false;
+  const data = await response.json();
+  if (!data?.token) return false;
+  setTokens(data.token, data.refreshToken || refreshToken);
+  return true;
 }
 
 function extractErrorMessage(body: unknown, fallback: string): string {
@@ -78,8 +74,12 @@ export async function apiFetch<T = unknown>(path: string, options: RequestOption
 
   if (response.status === 401 && !skipAuth && !_retried && getRefreshToken()) {
     refreshInFlight = refreshInFlight || doRefresh();
-    const refreshed = await refreshInFlight;
-    refreshInFlight = null;
+    let refreshed: boolean;
+    try {
+      refreshed = await refreshInFlight;
+    } finally {
+      refreshInFlight = null;
+    }
     if (refreshed) {
       return apiFetch<T>(path, { ...options, _retried: true });
     }

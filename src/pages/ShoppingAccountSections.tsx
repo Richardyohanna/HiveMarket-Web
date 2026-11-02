@@ -282,17 +282,26 @@ export function ShoppingMessagesSection({ user }: { user: MeResponse }) {
   }, [user.userId]);
 
   useEffect(() => {
-    if (!selectedId) return;
+    let cancelled = false;
 
-    // Reset scroll state whenever a conversation is opened
-    stickToBottomRef.current = true;
-    forceBottomRef.current = true;
-    pendingRestoreRef.current = null;
-    loadingOlderRef.current = false;
-    prevLastKeyRef.current = '';
-    setVisibleCount(PAGE_SIZE);
-    setNewWhileAway(0);
-    setShowJumpButton(false);
+    if (!selectedId) {
+      return () => { cancelled = true; };
+    }
+
+    // Reset scroll state whenever a conversation is opened.
+    // Schedule the UI reset asynchronously to avoid direct setState calls in an effect body.
+    queueMicrotask(() => {
+      if (cancelled) return;
+      stickToBottomRef.current = true;
+      forceBottomRef.current = true;
+      pendingRestoreRef.current = null;
+      loadingOlderRef.current = false;
+      prevLastKeyRef.current = '';
+      setVisibleCount(PAGE_SIZE);
+      setNewWhileAway(0);
+      setShowJumpButton(false);
+      setMessages([]);
+    });
 
     // On desktop, put the cursor in the message box so the user can type straight away.
     // Skipped on touch devices so the keyboard doesn't pop up unasked.
@@ -300,11 +309,9 @@ export function ShoppingMessagesSection({ user }: { user: MeResponse }) {
       window.setTimeout(() => messageInputRef.current?.focus({ preventScroll: true }), 0);
     }
 
-    let cancelled = false;
     void Promise.resolve()
       .then(() => {
         if (cancelled) return null;
-        setMessages([]);
         setHistoryError(null);
         setLoadingMessages(true);
         const conversation = selectedRef.current;
@@ -320,7 +327,7 @@ export function ShoppingMessagesSection({ user }: { user: MeResponse }) {
         if (!cancelled) setConversations((current) => current.map((item) => item.conversationId === selectedId ? { ...item, unreadCount: 0 } : item));
       })
       .catch((loadError: unknown) => {
-        if (!cancelled) setHistoryError(loadError instanceof Error ? loadError.message : 'Unable to load this conversation.');
+        if (!cancelled) setHistoryError(loadError instanceof Error ? loadError.message : 'Unable to load this conversation.' );
       })
       .finally(() => { if (!cancelled) setLoadingMessages(false); });
     return () => { cancelled = true; };

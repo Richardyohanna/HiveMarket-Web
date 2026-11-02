@@ -11,7 +11,19 @@ export type MeResponse = {
   emailAvailable?: boolean;
 };
 
-type TokenPair = { token: string; refreshToken: string; mustChangePassword?: boolean };
+export type TokenPair = {
+  token: string;
+  refreshToken: string;
+  mustChangePassword?: boolean;
+  userId?: string;
+  email?: string;
+  phone?: string;
+};
+export type RegistrationResponse = {
+  success: boolean;
+  requiresEmailVerification: boolean;
+  message: string;
+};
 
 export function login(identifier: string, password: string) {
   const identity = identifier.trim();
@@ -29,8 +41,8 @@ export function changePassword(currentPassword: string, newPassword: string) {
   });
 }
 
-export function register(payload: { fullName: string; email: string; phone: string; password: string }) {
-  return apiFetch<{ success: boolean; requiresEmailVerification: boolean; message: string }>(
+export function register(payload: { fullName: string; email: string; password: string }) {
+  return apiFetch<RegistrationResponse>(
     '/api/auth/register',
     { method: 'POST', body: payload, skipAuth: true },
   );

@@ -9,6 +9,7 @@ import {
   ClipboardList,
   Clock3,
   Heart,
+  Image,
   MapPin,
   MessageCircle,
   Package,
@@ -25,6 +26,7 @@ import {
 import { useAuth } from '../lib/AuthContext';
 import { useRouter } from '../lib/router';
 import ShareActions from '../components/ShareActions';
+import ShopGallerySection from '../components/ShopGallerySection';
 import ShopMap from '../components/ShopMap';
 import { ApiError } from '../lib/apiClient';
 import {
@@ -50,6 +52,7 @@ import {
   type ShopReview,
   type ShopServiceItem,
 } from '../api/shoppingApi';
+import { getSavedProducts, setProductSaved, type SavedProduct } from '../api/savedProductApi';
 import type { AdminShopProduct } from '../api/adminApi';
 import {
   ShoppingMessagesSection,
@@ -69,6 +72,8 @@ type ShoppingSection =
   | 'messages'
   | 'subscriptions'
   | 'saved'
+  | 'saved-products'
+  | 'gallery'
   | 'requests'
   | 'notifications';
 
@@ -86,12 +91,14 @@ const sections: Array<{
   { id: 'home', label: 'Home / Discover', path: '/shopping', icon: Store },
   { id: 'shops', label: 'Shops', path: '/shopping/shops', icon: ShoppingBag },
   { id: 'products', label: 'Products', path: '/shopping/products', icon: Package },
+  { id: 'gallery', label: 'Gallery', path: '/shopping/gallery', icon: Image },
   { id: 'cart', label: 'Cart', path: '/shopping/cart', icon: ShoppingCart },
   { id: 'search', label: 'Search', path: '/shopping/search', icon: Search },
   { id: 'map', label: 'Map', path: '/shopping/map', icon: MapPin },
   { id: 'messages', label: 'Messages', path: '/shopping/messages', icon: MessageCircle },
   { id: 'subscriptions', label: 'Subscriptions', path: '/shopping/subscriptions', icon: UsersRound },
   { id: 'saved', label: 'Saved shops', path: '/shopping/saved', icon: Bookmark },
+  { id: 'saved-products', label: 'Saved products', path: '/shopping/saved-products', icon: Bookmark },
   { id: 'requests', label: 'Shopping lists / requests', path: '/shopping/requests', icon: ClipboardList },
   { id: 'notifications', label: 'Notifications', path: '/shopping/notifications', icon: Bell },
   { id: 'account', label: 'Profile / Account', path: '/account', icon: UserRound },
@@ -286,6 +293,14 @@ export default function ShoppingPage({ section: sectionParam, initialShopId }: {
   const [loadingSavedShops, setLoadingSavedShops] = useState(false);
   const [savedShopsError, setSavedShopsError] = useState<string | null>(null);
   const [savedRetryKey, setSavedRetryKey] = useState(0);
+  const [savedProducts, setSavedProducts] = useState<SavedProduct[]>([]);
+  const [savedProductIds, setSavedProductIds] = useState<Set<string>>(() => new Set());
+  const [loadingSavedProducts, setLoadingSavedProducts] = useState(false);
+  const [loadingMoreSavedProducts, setLoadingMoreSavedProducts] = useState(false);
+  const [savedProductsHasNext, setSavedProductsHasNext] = useState(false);
+  const [savedProductsPage, setSavedProductsPage] = useState(0);
+  const [savedProductsError, setSavedProductsError] = useState<string | null>(null);
+  const [savedProductBusyIds, setSavedProductBusyIds] = useState<Set<string>>(() => new Set());
   const [shopActionError, setShopActionError] = useState<string | null>(null);
   const [shopActionNotice, setShopActionNotice] = useState<string | null>(null);
   const [busyShopAction, setBusyShopAction] = useState(false);
@@ -372,6 +387,31 @@ export default function ShoppingPage({ section: sectionParam, initialShopId }: {
     });
     return () => { cancelled = true; };
   }, [section, userId, savedRetryKey]);
+
+  useEffect(() => {
+    if (!userId || (section !== 'saved-products'
+      && section !== 'home' && section !== 'shops' && section !== 'products' && section !== 'search')) return;
+    let cancelled = false;
+    void Promise.resolve().then(async () => {
+      if (cancelled) return;
+      setLoadingSavedProducts(true);
+      setSavedProductsError(null);
+      try {
+        const response = await getSavedProducts(0, 30);
+        if (!cancelled) {
+          setSavedProducts(response.content);
+          setSavedProductIds(new Set(response.content.map((product) => product.productId)));
+          setSavedProductsPage(response.number);
+          setSavedProductsHasNext(!response.last);
+        }
+      } catch (error: unknown) {
+        if (!cancelled) setSavedProductsError(getErrorMessage(error, 'Unable to load saved products.'));
+      } finally {
+        if (!cancelled) setLoadingSavedProducts(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [section, userId]);
 
   useEffect(() => {
     if (!shopId || !userId) return;
@@ -483,6 +523,55 @@ export default function ShoppingPage({ section: sectionParam, initialShopId }: {
         : [...current, { product, quantity: 1 }];
     });
     setCartNotice(`${product.pName} added to your cart.`);
+  }
+
+  async function toggleProductSaved(productId: string) {
+    if (!userId) {
+      navigate(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+      return;
+    }
+    if (savedProductBusyIds.has(productId)) return;
+    const currentlySaved = savedProducts.some((product) => product.productId === productId);
+    setSavedProductBusyIds((current) => new Set(current).add(productId));
+    setSavedProductsError(null);
+    try {
+      await setProductSaved(productId, !currentlySaved);
+      if (currentlySaved) {
+        setSavedProductIds((current) => {
+          const next = new Set(current);
+          next.delete(productId);
+          return next;
+        });
+        setSavedProducts((current) => current.filter((product) => product.productId !== productId));
+      } else {
+        setSavedProductIds((current) => new Set(current).add(productId));
+      }
+    } catch (error: unknown) {
+      setSavedProductsError(getErrorMessage(error, 'Unable to update saved products.'));
+    } finally {
+      setSavedProductBusyIds((current) => {
+        const next = new Set(current);
+        next.delete(productId);
+        return next;
+      });
+    }
+  }
+
+  async function loadMoreSavedProducts() {
+    if (loadingMoreSavedProducts || !savedProductsHasNext) return;
+    setLoadingMoreSavedProducts(true);
+    setSavedProductsError(null);
+    try {
+      const response = await getSavedProducts(savedProductsPage + 1, 30);
+      setSavedProducts((current) => [...current, ...response.content]);
+      setSavedProductIds((current) => new Set([...current, ...response.content.map((product) => product.productId)]));
+      setSavedProductsPage(response.number);
+      setSavedProductsHasNext(!response.last);
+    } catch (error: unknown) {
+      setSavedProductsError(getErrorMessage(error, 'Unable to load more saved products.'));
+    } finally {
+      setLoadingMoreSavedProducts(false);
+    }
   }
 
   function updateCartQuantity(productId: string, quantity: number) {
@@ -894,6 +983,75 @@ export default function ShoppingPage({ section: sectionParam, initialShopId }: {
     );
   }
 
+  function renderSavedProducts() {
+    if (loadingSavedProducts) return <p role="status" className="rounded-xl border border-[var(--hive-border)] bg-white p-5 text-sm text-gray-600">Loading saved products…</p>;
+    if (savedProductsError && savedProducts.length === 0) return (
+      <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        {savedProductsError}
+        <button type="button" onClick={() => {
+          setLoadingSavedProducts(true);
+          void getSavedProducts(0, 30)
+            .then((response) => {
+              setSavedProducts(response.content);
+              setSavedProductIds(new Set(response.content.map((product) => product.productId)));
+              setSavedProductsPage(response.number);
+              setSavedProductsHasNext(!response.last);
+              setSavedProductsError(null);
+            })
+            .catch((error: unknown) => setSavedProductsError(getErrorMessage(error, 'Unable to load saved products.')))
+            .finally(() => setLoadingSavedProducts(false));
+        }} className="ml-2 font-semibold underline">
+          Retry
+        </button>
+      </div>
+    );
+    if (!savedProducts.length) return (
+      <section className="rounded-xl border border-[var(--hive-border)] bg-white p-8 text-center">
+        <Bookmark className="mx-auto text-gray-400" size={30} />
+        <h2 className="mt-3 font-semibold text-[#17191c]">No saved products</h2>
+        <p className="mt-1 text-sm text-gray-600">Save a product from a shop catalog or search results to find it here.</p>
+      </section>
+    );
+    return (
+      <>
+        {savedProductsError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{savedProductsError}</p>}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {savedProducts.map((product) => (
+            <article key={product.productId} className="overflow-hidden rounded-2xl border border-[var(--hive-border)] bg-white">
+              {product.imageUrls[0]
+                ? <img src={product.imageUrls[0]} alt="" className="h-44 w-full object-cover" />
+                : <div className="flex h-44 items-center justify-center bg-gray-50 text-gray-400"><Package size={38} /></div>}
+              <div className="p-4">
+                <h3 className="font-bold text-[#17191c]">{product.pName}</h3>
+                <p className="mt-1 line-clamp-2 text-sm text-gray-600">{product.pDetail}</p>
+                <p className="mt-3 text-sm font-bold text-[#008100]">{formatCurrency(Number(product.pAmount) || 0)}</p>
+                <p className="mt-1 text-xs text-gray-500">{product.category}</p>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  {product.shopId
+                    ? <button type="button" onClick={() => void openShop(product.shopId!)} className="text-sm font-semibold text-[#008100] hover:underline">View shop</button>
+                    : <span />}
+                  <button
+                    type="button"
+                    disabled={savedProductBusyIds.has(product.productId)}
+                    onClick={() => void toggleProductSaved(product.productId)}
+                    className="rounded-lg border border-[var(--hive-border)] px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    {savedProductBusyIds.has(product.productId) ? 'Removing…' : 'Remove saved'}
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+        {savedProductsHasNext && (
+          <button type="button" disabled={loadingMoreSavedProducts} onClick={() => void loadMoreSavedProducts()} className="mx-auto mt-5 block rounded-lg border border-[var(--hive-border)] bg-white px-5 py-2.5 text-sm font-semibold text-[#17191c] disabled:opacity-50">
+            {loadingMoreSavedProducts ? 'Loading…' : 'Load more saved products'}
+          </button>
+        )}
+      </>
+    );
+  }
+
   function renderProducts(limit?: number) {
     if (loadingCatalog) return <p className="rounded-xl border border-[var(--hive-border)] bg-white p-5 text-sm text-gray-600">Loading catalog…</p>;
     if (catalogError) return <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{catalogError}</p>;
@@ -919,6 +1077,16 @@ export default function ShoppingPage({ section: sectionParam, initialShopId }: {
               <p className="mt-1 line-clamp-2 min-h-10 text-sm text-gray-600">{product.pDetail}</p>
               <p className="mt-3 font-bold text-[#008100]">{formatCurrency(Number(product.pAmount) || 0)}</p>
               <p className="mt-1 text-xs text-gray-500">{product.category} · {product.pQuantity > 0 ? `${product.pQuantity} available` : 'Out of stock'}</p>
+              <button
+                type="button"
+                disabled={savedProductBusyIds.has(product.id)}
+                onClick={() => void toggleProductSaved(product.id)}
+                aria-pressed={savedProductIds.has(product.id)}
+                className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-[#008100] disabled:opacity-50"
+              >
+                <Bookmark size={16} fill={savedProductIds.has(product.id) ? 'currentColor' : 'none'} />
+                {savedProductIds.has(product.id) ? 'Saved' : 'Save product'}
+              </button>
               <ShareActions
                 compact
                 url={getProductShareUrl(product.id)}
@@ -1017,6 +1185,7 @@ export default function ShoppingPage({ section: sectionParam, initialShopId }: {
               {renderProducts()}
               {cartNotice && <p role="status" className="text-sm font-medium text-[#006d24]">{cartNotice}</p>}
             </section>
+            <ShopGallerySection key={shop.id} shopId={shop.id} shopName={shopName} />
             <section className="space-y-4">
               <div><h2 className="text-lg font-bold text-[#17191c]">Services</h2><p className="text-sm text-gray-500">Services offered by {shopName}.</p></div>
               {renderShopServices()}
@@ -1059,6 +1228,16 @@ export default function ShoppingPage({ section: sectionParam, initialShopId }: {
                     <h3 className="truncate font-semibold text-[#17191c]">{product.pName}</h3>
                     <p className="mt-1 line-clamp-2 text-xs text-gray-600">{product.pDetail}</p>
                     <p className="mt-2 text-sm font-bold text-[#008100]">{formatCurrency(Number(product.pAmount) || 0)}</p>
+                    <button
+                      type="button"
+                      disabled={savedProductBusyIds.has(product.id)}
+                      onClick={() => void toggleProductSaved(product.id)}
+                      aria-pressed={savedProductIds.has(product.id)}
+                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-[#008100] disabled:opacity-50"
+                    >
+                      <Bookmark size={14} fill={savedProductIds.has(product.id) ? 'currentColor' : 'none'} />
+                      {savedProductIds.has(product.id) ? 'Saved' : 'Save product'}
+                    </button>
                     <ShareActions compact url={getProductShareUrl(product.id)} title={product.pName} text={`Check out ${product.pName} on HiveMarket`} />
                     {product.shopId && <button type="button" onClick={() => void openShop(product.shopId || '')} className="mt-2 text-xs font-semibold text-[#008100] underline">View shop and buy</button>}
                   </div>
@@ -1173,6 +1352,16 @@ export default function ShoppingPage({ section: sectionParam, initialShopId }: {
                 </section>
               )}
 
+              {section === 'saved-products' && (
+                <section className="space-y-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-[#17191c]">Saved products</h2>
+                    <p className="mt-1 text-sm text-gray-600">Products saved to your HiveMarket account.</p>
+                  </div>
+                  {renderSavedProducts()}
+                </section>
+              )}
+
               {section === 'map' && (
                 <>
                   {shop && <>{renderShopCard(false)}{renderShopMapPreview()}{renderShopReviews()}</>}
@@ -1267,10 +1456,11 @@ export default function ShoppingPage({ section: sectionParam, initialShopId }: {
         </aside>
       </div>
 
-      <nav aria-label="Mobile shopping navigation" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-[var(--hive-border)] bg-white px-1 pb-[env(safe-area-inset-bottom)] pt-1 lg:hidden">
+      <nav aria-label="Mobile shopping navigation" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-[var(--hive-border)] bg-white px-1 pb-[env(safe-area-inset-bottom)] pt-1 lg:hidden">
         {[
           { label: 'Home', path: '/shopping', icon: Store },
           { label: 'Shops', path: '/shopping/shops', icon: ShoppingBag },
+          { label: 'Gallery', path: '/shopping/gallery', icon: Image },
           { label: 'Map', path: '/shopping/map', icon: MapPin },
           { label: 'Messages', path: '/shopping/messages', icon: MessageCircle },
           { label: 'Account', path: '/account', icon: UserRound },

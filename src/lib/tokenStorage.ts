@@ -1,8 +1,8 @@
 // Token storage. Tokens are kept in localStorage so a sign-in survives page reloads.
 // This is a public-facing web app with short-lived access tokens + refresh tokens,
 // matching the mobile app's existing auth model.
-const ACCESS_TOKEN_KEY = 'hive_access_token';
-const REFRESH_TOKEN_KEY = 'hive_refresh_token';
+export const ACCESS_TOKEN_KEY = 'hive_access_token';
+export const REFRESH_TOKEN_KEY = 'hive_refresh_token';
 
 export function getAccessToken(): string | null {
   return localStorage.getItem(ACCESS_TOKEN_KEY);
