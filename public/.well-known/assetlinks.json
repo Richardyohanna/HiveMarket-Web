@@ -1,0 +1,17 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.richard091.hiveMarket",
+      "sha256_cert_fingerprints": [
+        "C6:6B:FE:34:00:9B:20:92:DD:6F:80:70:F2:68:96:3F:25:B7:1A:7C:8B:3A:DD:D4:A1:24:9F:2A:DE:4E:7A:6A",
+        "DC:79:CD:B1:52:0B:B1:42:59:4C:65:50:DA:68:F4:B7:0E:3E:C7:08:ED:C4:F5:E2:1C:DC:FA:55:F2:6D:7E:4D",
+        "BC:1D:91:F9:2C:DD:26:69:DE:58:B2:5F:85:F8:81:5C:39:3E:50:B3:E4:79:59:F3:50:0F:EC:02:D4:41:F0:09"
+      ]
+    }
+  }
+]
