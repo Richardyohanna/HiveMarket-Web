@@ -3,6 +3,12 @@ import { Camera, ChevronLeft, ChevronRight, Images, LoaderCircle, Trash2, Upload
 import { deleteGalleryPost, getShopGallery, uploadShopGalleryImage, type GalleryPost } from '../api/galleryApi';
 
 const MAX_UPLOAD_IMAGES = 10;
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const SUPPORTED_IMAGE_TYPES = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+} as const;
 
 type GalleryUploadItem = {
   id: string;
@@ -28,6 +34,37 @@ function formatUploadDate(value: string) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
 }
 
+async function prepareGalleryImage(file: File): Promise<File> {
+  if (file.size === 0) throw new Error(`${file.name} is empty.`);
+  if (file.size > MAX_IMAGE_BYTES) {
+    throw new Error(`${file.name} exceeds the 20 MB per-image upload limit.`);
+  }
+
+  const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  let mimeType: keyof typeof SUPPORTED_IMAGE_TYPES | null = null;
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    mimeType = 'image/jpeg';
+  } else if ([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+    .every((byte, index) => bytes[index] === byte)) {
+    mimeType = 'image/png';
+  } else if (bytes.length >= 12
+    && String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF'
+    && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP') {
+    mimeType = 'image/webp';
+  }
+
+  if (!mimeType) {
+    throw new Error(`${file.name} is not a supported JPEG, PNG, or WebP image.`);
+  }
+
+  const extension = SUPPORTED_IMAGE_TYPES[mimeType];
+  const stem = file.name.replace(/\.[^.]+$/, '') || 'gallery-image';
+  return new File([file], `${stem}.${extension}`, {
+    type: mimeType,
+    lastModified: file.lastModified,
+  });
+}
+
 export default function ShopGalleryManagement({
   shopId,
   shopName,
@@ -49,10 +86,14 @@ export default function ShopGalleryManagement({
   const [notice, setNotice] = useState<string | null>(null);
   const [uploadItems, setUploadItems] = useState<GalleryUploadItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isValidatingFiles, setIsValidatingFiles] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ completed: number; total: number } | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const previewUrls = useRef(new Set<string>());
   const uploadLock = useRef(false);
+  const selectionLock = useRef(false);
+  const uploadAbortController = useRef<AbortController | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const loadGallery = useCallback(async (page = 0, append = false) => {
@@ -97,6 +138,7 @@ export default function ShopGalleryManagement({
   }, [shopId]);
 
   useEffect(() => () => {
+    uploadAbortController.current?.abort();
     previewUrls.current.forEach((url) => URL.revokeObjectURL(url));
     previewUrls.current.clear();
   }, []);
@@ -118,48 +160,68 @@ export default function ShopGalleryManagement({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [posts, selectedIndex]);
 
-  function addFiles(files: FileList | File[]) {
+  async function addFiles(files: FileList | File[]) {
+    if (selectionLock.current || isUploading) return;
     const incoming = Array.from(files);
-    const images = incoming.filter((file) => file.type.startsWith('image/'));
-    const duplicateKeys = new Set(uploadItems.map((item) => `${item.file.name}:${item.file.size}:${item.file.lastModified}`));
-    const uniqueImages = images.filter((file) => {
-      const key = `${file.name}:${file.size}:${file.lastModified}`;
-      if (duplicateKeys.has(key)) return false;
-      duplicateKeys.add(key);
-      return true;
-    });
-    const remaining = Math.max(0, MAX_UPLOAD_IMAGES - uploadItems.length);
-    const accepted = uniqueImages.slice(0, remaining);
-
-    if (images.length !== incoming.length) {
-      setMutationError('Only image files can be added to the gallery.');
-    } else if (uniqueImages.length > remaining) {
-      setMutationError(`You can upload up to ${MAX_UPLOAD_IMAGES} images at a time.`);
-    } else {
-      setMutationError(null);
-    }
+    if (!incoming.length) return;
+    selectionLock.current = true;
+    setIsValidatingFiles(true);
+    setMutationError(null);
     setNotice(null);
-    setUploadItems((current) => [
-      ...current,
-      ...accepted.map((file) => {
-        const previewUrl = URL.createObjectURL(file);
-        previewUrls.current.add(previewUrl);
-        return { id: createUploadId(), file, previewUrl, status: 'pending' as const };
-      }),
-    ]);
+    try {
+      const preparedFiles = await Promise.all(incoming.map(prepareGalleryImage));
+      const duplicateKeys = new Set(uploadItems.map((item) => `${item.file.name}:${item.file.size}:${item.file.lastModified}`));
+      const uniqueFiles = preparedFiles.filter((file) => {
+        const key = `${file.name}:${file.size}:${file.lastModified}`;
+        if (duplicateKeys.has(key)) return false;
+        duplicateKeys.add(key);
+        return true;
+      });
+
+      if (uploadItems.length + uniqueFiles.length > MAX_UPLOAD_IMAGES) {
+        throw new Error(`You can select up to ${MAX_UPLOAD_IMAGES} images at a time.`);
+      }
+      if (!uniqueFiles.length) {
+        setNotice('Those images are already in your selection.');
+        return;
+      }
+
+      setUploadItems((current) => [
+        ...current,
+        ...uniqueFiles.map((file) => {
+          const previewUrl = URL.createObjectURL(file);
+          previewUrls.current.add(previewUrl);
+          return { id: createUploadId(), file, previewUrl, status: 'pending' as const };
+        }),
+      ]);
+    } catch (error) {
+      setMutationError(error instanceof Error ? error.message : 'Unable to validate the selected images.');
+    } finally {
+      selectionLock.current = false;
+      setIsValidatingFiles(false);
+    }
   }
 
-  function removeSelectedImage(id: string) {
-    const item = uploadItems.find((image) => image.id === id);
-    if (item) {
+  function cancelSelection() {
+    uploadItems.forEach((item) => {
       URL.revokeObjectURL(item.previewUrl);
       previewUrls.current.delete(item.previewUrl);
-    }
-    setUploadItems((current) => current.filter((image) => image.id !== id));
+    });
+    setUploadItems([]);
+    setMutationError(null);
+    setNotice(null);
   }
 
   async function uploadSelectedImages() {
-    if (uploadLock.current) return;
+    if (uploadLock.current || isValidatingFiles) return;
+    if (uploadItems.length < 1) {
+      setMutationError('Select at least 1 image before uploading.');
+      return;
+    }
+    if (uploadItems.length > MAX_UPLOAD_IMAGES) {
+      setMutationError(`You can upload up to ${MAX_UPLOAD_IMAGES} images at a time.`);
+      return;
+    }
     const pending = uploadItems.filter((image) => image.status === 'pending' || image.status === 'failed');
     if (!pending.length) return;
 
@@ -167,27 +229,41 @@ export default function ShopGalleryManagement({
     setIsUploading(true);
     setMutationError(null);
     setNotice(null);
+    const controller = new AbortController();
+    uploadAbortController.current = controller;
     const uploadedIds = new Set<string>();
     let failedCount = 0;
+    let wasCancelled = false;
+    let completed = 0;
+    setUploadProgress({ completed, total: pending.length });
 
     for (const item of pending) {
       setUploadItems((current) => current.map((image) => image.id === item.id
         ? { ...image, status: 'uploading', error: undefined }
         : image));
       try {
-        await uploadShopGalleryImage(shopId, item.id, item.file);
+        await uploadShopGalleryImage(shopId, item.id, item.file, controller.signal);
         uploadedIds.add(item.id);
       } catch (error) {
         failedCount += 1;
-        const message = error instanceof Error ? error.message : 'Upload failed. Please try again.';
+        wasCancelled = controller.signal.aborted;
+        const message = wasCancelled
+          ? 'Upload cancelled. Retry this picture if it is not in the gallery.'
+          : error instanceof Error ? error.message : 'Upload failed. Please try again.';
         setUploadItems((current) => current.map((image) => image.id === item.id
           ? { ...image, status: 'failed', error: message }
           : image));
+      } finally {
+        completed += 1;
+        setUploadProgress({ completed, total: pending.length });
       }
+      if (wasCancelled) break;
     }
 
+    uploadAbortController.current = null;
     uploadLock.current = false;
     setIsUploading(false);
+    setUploadProgress(null);
     if (uploadedIds.size) {
       uploadItems
         .filter((image) => uploadedIds.has(image.id))
@@ -198,13 +274,32 @@ export default function ShopGalleryManagement({
       setUploadItems((current) => current.filter((image) => {
         return !uploadedIds.has(image.id);
       }));
-      setNotice(failedCount
-        ? `${uploadedIds.size} image${uploadedIds.size === 1 ? '' : 's'} uploaded; ${failedCount} failed and can be retried.`
-        : `${uploadedIds.size} image${uploadedIds.size === 1 ? '' : 's'} uploaded to ${shopName}'s gallery.`);
+      setNotice(wasCancelled
+        ? `Upload cancelled. ${uploadedIds.size} image${uploadedIds.size === 1 ? '' : 's'} completed; the remaining pictures are available to retry.`
+        : failedCount
+          ? `${uploadedIds.size} image${uploadedIds.size === 1 ? '' : 's'} uploaded; ${failedCount} failed and can be retried.`
+          : `${uploadedIds.size} image${uploadedIds.size === 1 ? '' : 's'} uploaded to ${shopName}'s gallery.`);
       await loadGallery();
     } else if (failedCount) {
-      setMutationError(`${failedCount} image${failedCount === 1 ? '' : 's'} could not be uploaded. Review the error and retry.`);
+      if (wasCancelled) {
+        setNotice('Upload cancelled. Selected pictures remain available to retry.');
+        await loadGallery();
+      }
+      else setMutationError(`${failedCount} image${failedCount === 1 ? '' : 's'} could not be uploaded. Review the error and retry.`);
     }
+  }
+
+  function cancelUpload() {
+    uploadAbortController.current?.abort();
+  }
+
+  function removeSelectedImage(id: string) {
+    const item = uploadItems.find((image) => image.id === id);
+    if (item) {
+      URL.revokeObjectURL(item.previewUrl);
+      previewUrls.current.delete(item.previewUrl);
+    }
+    setUploadItems((current) => current.filter((image) => image.id !== id));
   }
 
   async function removePost(post: GalleryPost) {
@@ -249,29 +344,30 @@ export default function ShopGalleryManagement({
           <div className="flex items-start gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-green-50 text-[#008100]"><Camera size={20} /></span>
             <div>
-              <h3 className="font-semibold text-[#17191c]">Upload to Gallery</h3>
-              <p className="mt-1 text-sm text-gray-600">Share up to {MAX_UPLOAD_IMAGES} photos without creating product listings.</p>
+              <h3 className="font-semibold text-[#17191c]">Upload Gallery Pictures</h3>
+              <p className="mt-1 text-sm text-gray-600">Select 1–{MAX_UPLOAD_IMAGES} JPEG, PNG, or WebP images. Each image can be up to 20 MB.</p>
             </div>
           </div>
           <input
             ref={fileInput}
             type="file"
-            accept="image/*"
+            accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
             multiple
             aria-label="Choose gallery images"
             className="sr-only"
             onChange={(event) => {
-              if (event.currentTarget.files) addFiles(event.currentTarget.files);
+              if (event.currentTarget.files) void addFiles(event.currentTarget.files);
               event.currentTarget.value = '';
             }}
           />
           <button
             type="button"
             onClick={() => fileInput.current?.click()}
-            disabled={isUploading || uploadItems.length >= MAX_UPLOAD_IMAGES}
+            disabled={isUploading || isValidatingFiles || uploadItems.length >= MAX_UPLOAD_IMAGES}
             className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--hive-border)] bg-white px-4 py-2.5 text-sm font-semibold text-[#17191c] disabled:opacity-50"
           >
-            <Images size={17} /> Choose images ({uploadItems.length}/{MAX_UPLOAD_IMAGES})
+            {isValidatingFiles ? <LoaderCircle size={17} className="animate-spin" /> : <Images size={17} />}
+            {isValidatingFiles ? 'Checking images…' : `Upload Gallery Pictures (${uploadItems.length}/${MAX_UPLOAD_IMAGES})`}
           </button>
 
           {uploadItems.length > 0 && (
@@ -303,11 +399,21 @@ export default function ShopGalleryManagement({
               <button
                 type="button"
                 onClick={() => void uploadSelectedImages()}
-                disabled={isUploading || uploadItems.every((item) => item.status === 'uploading')}
+                disabled={isUploading || isValidatingFiles || uploadItems.length < 1}
                 className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#008100] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
               >
                 {isUploading ? <LoaderCircle size={17} className="animate-spin" /> : <Upload size={17} />}
-                {isUploading ? 'Uploading images…' : uploadItems.some((item) => item.status === 'failed') ? 'Retry failed images' : 'Upload images'}
+                {isUploading
+                  ? `Uploading images${uploadProgress ? ` (${uploadProgress.completed}/${uploadProgress.total})` : '…'}`
+                  : uploadItems.some((item) => item.status === 'failed') ? 'Retry failed images' : 'Upload images'}
+              </button>
+              <button
+                type="button"
+                onClick={isUploading ? cancelUpload : cancelSelection}
+                disabled={isValidatingFiles}
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--hive-border)] bg-white px-4 py-2.5 text-sm font-semibold text-[#17191c] disabled:opacity-50"
+              >
+                <X size={17} /> {isUploading ? 'Cancel upload' : 'Cancel selection'}
               </button>
             </>
           )}

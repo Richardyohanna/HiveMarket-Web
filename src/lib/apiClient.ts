@@ -18,6 +18,7 @@ type RequestOptions = {
   body?: unknown;
   isFormData?: boolean;
   skipAuth?: boolean;
+  signal?: AbortSignal;
   // Internal: prevents infinite refresh loops.
   _retried?: boolean;
 };
@@ -56,7 +57,7 @@ function extractErrorMessage(body: unknown, fallback: string): string {
  * on any non-2xx response.
  */
 export async function apiFetch<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, isFormData = false, skipAuth = false, _retried = false } = options;
+  const { method = 'GET', body, isFormData = false, skipAuth = false, signal, _retried = false } = options;
 
   const headers: Record<string, string> = {};
   if (!isFormData) headers['Content-Type'] = 'application/json';
@@ -70,6 +71,7 @@ export async function apiFetch<T = unknown>(path: string, options: RequestOption
     method,
     headers,
     body: body === undefined ? undefined : isFormData ? (body as FormData) : JSON.stringify(body),
+    signal,
   });
 
   if (response.status === 401 && !skipAuth && !_retried && getRefreshToken()) {

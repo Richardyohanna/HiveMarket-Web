@@ -456,7 +456,7 @@ export default function AdminShopManagementPage({ shopId }: { shopId: string }) 
         )}
 
         {view === 'gallery' && (
-          <ShopGalleryManagement shopId={shop.id} shopName={shop.name} canUpload={false} canDelete />
+          <ShopGalleryManagement key={shop.id} shopId={shop.id} shopName={shop.name} canUpload canDelete />
         )}
 
         {view === 'services' && (

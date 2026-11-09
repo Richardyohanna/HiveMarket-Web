@@ -63,7 +63,7 @@ export function getShopGallery(shopId: string, page: number, size = 30) {
   );
 }
 
-export function uploadShopGalleryImage(shopId: string, clientUploadId: string, image: File) {
+export function uploadShopGalleryImage(shopId: string, clientUploadId: string, image: File, signal?: AbortSignal) {
   const form = new FormData();
   form.append('shopId', shopId);
   form.append('clientUploadId', clientUploadId);
@@ -72,6 +72,7 @@ export function uploadShopGalleryImage(shopId: string, clientUploadId: string, i
     method: 'POST',
     body: form,
     isFormData: true,
+    signal,
   });
 }
 
