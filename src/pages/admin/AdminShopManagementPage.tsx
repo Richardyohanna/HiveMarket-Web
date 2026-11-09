@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { ArrowLeft, MapPin, Package, Store, Wrench } from 'lucide-react';
+import { ArrowLeft, Images, MapPin, Package, Store, Wrench } from 'lucide-react';
 import {
   createProduct,
   createShopService,
@@ -22,8 +22,10 @@ import {
 import { ApiError } from '../../lib/apiClient';
 import { useRouter } from '../../lib/router';
 import { ErrorBanner, FieldLabel, PrimaryButton, SecondaryButton, SuccessBanner, TextInput } from '../../components/ui';
+import ProductImagePicker from '../../components/ProductImagePicker';
+import ShopGalleryManagement from '../../components/ShopGalleryManagement';
 
-type ManagementView = 'overview' | 'products' | 'services' | 'add-product' | 'add-service' | 'edit-shop';
+type ManagementView = 'overview' | 'products' | 'services' | 'gallery' | 'add-product' | 'add-service' | 'edit-shop';
 
 const countries = [
   'Nigeria',
@@ -77,6 +79,7 @@ export default function AdminShopManagementPage({ shopId }: { shopId: string }) 
   const [locationDataError, setLocationDataError] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<AdminShopProduct | null>(null);
   const [editingService, setEditingService] = useState<AdminShopService | null>(null);
+  const [productImageFiles, setProductImageFiles] = useState<File[]>([]);
 
   const loadShopData = useCallback(() => Promise.allSettled([
       getAdminShopDetail(shopId),
@@ -150,8 +153,6 @@ export default function AdminShopManagementPage({ shopId }: { shopId: string }) 
       category: String(form.get('category') || '').trim(),
       shopId: shop.id,
     };
-    const imageInput = event.currentTarget.elements.namedItem('images') as HTMLInputElement | null;
-    const imageFiles = Array.from(imageInput?.files ?? []).filter((image) => image.size > 0);
     if (!payload.pName || !payload.pDetail || !payload.category) {
       setError('Product name, description, and category are required.');
       return;
@@ -163,9 +164,9 @@ export default function AdminShopManagementPage({ shopId }: { shopId: string }) 
       const saved = editingProduct
         ? await updateAdminShopProduct(editingProduct.id, payload)
         : await createProduct(payload);
-      if (imageFiles.length && !editingProduct) {
+      if (productImageFiles.length) {
         try {
-          await uploadProductImages(saved.id, imageFiles);
+          await uploadProductImages(saved.id, productImageFiles);
         } catch (imageError) {
           setNotice(`Product saved, but its images could not be uploaded: ${imageError instanceof Error ? imageError.message : 'Upload failed.'}`);
           setEditingProduct(null);
@@ -175,6 +176,7 @@ export default function AdminShopManagementPage({ shopId }: { shopId: string }) 
         }
       }
       setNotice(editingProduct ? 'Product updated.' : 'Product added to this shop.');
+      setProductImageFiles([]);
       setEditingProduct(null);
       setView('products');
       await reload();
@@ -367,8 +369,9 @@ export default function AdminShopManagementPage({ shopId }: { shopId: string }) 
         <nav className="mb-5 flex flex-wrap gap-2" aria-label="Shop management">
           <SecondaryButton type="button" className="w-auto" onClick={backToOverview}>Overview</SecondaryButton>
           <SecondaryButton type="button" className="w-auto" onClick={() => setView('products')}>View products</SecondaryButton>
+          <SecondaryButton type="button" className="w-auto" onClick={() => setView('gallery')}><Images className="mr-2 inline" size={16} />Gallery</SecondaryButton>
           <SecondaryButton type="button" className="w-auto" onClick={() => setView('services')}>View services</SecondaryButton>
-          <PrimaryButton type="button" className="w-auto" onClick={() => { setEditingProduct(null); setView('add-product'); }}>Add product</PrimaryButton>
+          <PrimaryButton type="button" className="w-auto" onClick={() => { setEditingProduct(null); setProductImageFiles([]); setView('add-product'); }}>Add product</PrimaryButton>
           <PrimaryButton type="button" className="w-auto" onClick={() => { setEditingService(null); setView('add-service'); }}>Add service</PrimaryButton>
           <SecondaryButton type="button" className="w-auto" onClick={() => { setError(null); setView('edit-shop'); }}>Edit shop details</SecondaryButton>
         </nav>
@@ -422,19 +425,25 @@ export default function AdminShopManagementPage({ shopId }: { shopId: string }) 
           <section className={cardClass}>
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-lg font-bold"><Package className="mr-2 inline" size={19} />Products</h2>
-              <PrimaryButton type="button" className="w-auto" onClick={() => { setEditingProduct(null); setView('add-product'); }}>Add product</PrimaryButton>
+              <PrimaryButton type="button" className="w-auto" onClick={() => { setEditingProduct(null); setProductImageFiles([]); setView('add-product'); }}>Add product</PrimaryButton>
             </div>
             {productsError && <ErrorBanner message={productsError} />}
             {products.length ? (
               <div className="divide-y divide-[var(--hive-border)]">
                 {products.map((product) => (
                   <div key={product.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
-                    <div>
-                      <p className="font-semibold">{product.pName}</p>
-                      <p className="text-sm text-gray-600">{product.category} · ₦{Number(product.pAmount).toLocaleString()} · Qty {product.pQuantity}</p>
+                    <div className="flex items-center gap-3">
+                      {product.imageUrls?.[0]
+                        ? <img src={product.imageUrls[0]} alt="" className="h-12 w-12 rounded-lg object-cover" />
+                        : <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-green-50 text-[#008100]"><Package size={20} /></div>}
+                      <div>
+                        <p className="font-semibold">{product.pName}</p>
+                        <p className="text-sm text-gray-600">{product.category} · ₦{Number(product.pAmount).toLocaleString()} · Qty {product.pQuantity}</p>
+                        {product.status && <p className="text-xs text-gray-500">Status: {product.status}</p>}
+                      </div>
                     </div>
                     <div className="flex gap-2">
-                      <SecondaryButton type="button" className="w-auto px-3" onClick={() => { setEditingProduct(product); setView('add-product'); }}>Edit</SecondaryButton>
+                      <SecondaryButton type="button" className="w-auto px-3" onClick={() => { setEditingProduct(product); setProductImageFiles([]); setView('add-product'); }}>Edit</SecondaryButton>
                       <SecondaryButton type="button" className="w-auto px-3 text-red-700" disabled={isSaving} onClick={() => void removeProduct(product)}>Delete</SecondaryButton>
                     </div>
                   </div>
@@ -444,6 +453,10 @@ export default function AdminShopManagementPage({ shopId }: { shopId: string }) 
               <p className="py-6 text-center text-sm text-gray-600">No products have been added to this shop yet.</p>
             )}
           </section>
+        )}
+
+        {view === 'gallery' && (
+          <ShopGalleryManagement shopId={shop.id} shopName={shop.name} canUpload={false} canDelete />
         )}
 
         {view === 'services' && (
@@ -495,7 +508,14 @@ export default function AdminShopManagementPage({ shopId }: { shopId: string }) 
                 <div><FieldLabel>Quantity</FieldLabel><TextInput name="pQuantity" type="number" min="0" step="1" required defaultValue={editingProduct?.pQuantity ?? 1} /></div>
               </div>
               <div><FieldLabel>Category</FieldLabel><TextInput name="category" required defaultValue={editingProduct?.category} /></div>
-              {!editingProduct && <div><FieldLabel>Product images (optional)</FieldLabel><input name="images" type="file" accept="image/*" multiple /></div>}
+              <div>
+                <FieldLabel>{editingProduct ? 'Add product images' : 'Product images (optional)'}</FieldLabel>
+                <ProductImagePicker
+                  existingImages={editingProduct?.imageUrls}
+                  images={productImageFiles}
+                  onChange={setProductImageFiles}
+                />
+              </div>
               <div className="flex gap-3">
                 <PrimaryButton type="submit" isLoading={isSaving}>{editingProduct ? 'Save product' : 'Add product'}</PrimaryButton>
                 <SecondaryButton type="button" onClick={() => setView('products')}>Cancel</SecondaryButton>

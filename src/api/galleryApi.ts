@@ -63,6 +63,24 @@ export function getShopGallery(shopId: string, page: number, size = 30) {
   );
 }
 
+export function uploadShopGalleryImage(shopId: string, clientUploadId: string, image: File) {
+  const form = new FormData();
+  form.append('shopId', shopId);
+  form.append('clientUploadId', clientUploadId);
+  form.append('images', image);
+  return apiFetch<GalleryPost>('/api/gallery/posts', {
+    method: 'POST',
+    body: form,
+    isFormData: true,
+  });
+}
+
+export function deleteGalleryPost(postId: string) {
+  return apiFetch<void>(`/api/gallery/posts/${encodeURIComponent(postId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export function getGalleryComments(postId: string, page = 0, size = 20) {
   const params = new URLSearchParams({ page: String(page), size: String(size) });
   return apiFetch<GalleryCommentPage>(

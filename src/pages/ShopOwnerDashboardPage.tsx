@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ChartNoAxesColumnIncreasing,
   ClipboardList,
+  Images,
   MessageCircle,
   MessageSquareText,
   Package,
@@ -39,8 +40,9 @@ import ShopManagementPage from './ShopManagementPage';
 import ShopOwnerMessagesSection from './ShopOwnerMessagesSection';
 import ShopOwnerProfileSection from './ShopOwnerProfileSection';
 import ShopOwnerRequestsSection from './ShopOwnerRequestsSection';
+import ShopGalleryManagement from '../components/ShopGalleryManagement';
 
-type DashboardSection = 'dashboard' | 'profile' | 'visitors' | 'requests' | 'listings' | 'transactions' | 'notifications' | 'messages' | 'reviews';
+type DashboardSection = 'dashboard' | 'profile' | 'visitors' | 'requests' | 'listings' | 'gallery' | 'transactions' | 'notifications' | 'messages' | 'reviews';
 
 const navigation: Array<{ id: DashboardSection | 'listings'; label: string; icon: typeof Store; path: string }> = [
   { id: 'dashboard', label: 'Overview', icon: ChartNoAxesColumnIncreasing, path: '/shop-owner/dashboard' },
@@ -48,13 +50,14 @@ const navigation: Array<{ id: DashboardSection | 'listings'; label: string; icon
   { id: 'visitors', label: 'Visitors', icon: UserRound, path: '/shop-owner/visitors' },
   { id: 'requests', label: 'Shopping requests', icon: ClipboardList, path: '/shop-owner/requests' },
   { id: 'listings', label: 'Products & services', icon: Package, path: '/shop-owner/listings' },
+  { id: 'gallery', label: 'Shop Gallery', icon: Images, path: '/shop-owner/gallery' },
   { id: 'transactions', label: 'Transactions', icon: ChartNoAxesColumnIncreasing, path: '/shop-owner/transactions' },
   { id: 'notifications', label: 'Notifications', icon: Bell, path: '/shop-owner/notifications' },
   { id: 'messages', label: 'Messages', icon: MessageCircle, path: '/shop-owner/messages' },
   { id: 'reviews', label: 'Reviews', icon: Star, path: '/shop-owner/reviews' },
 ];
 const dashboardSections: DashboardSection[] = [
-  'dashboard', 'profile', 'visitors', 'requests', 'listings', 'transactions', 'notifications', 'messages', 'reviews',
+  'dashboard', 'profile', 'visitors', 'requests', 'listings', 'gallery', 'transactions', 'notifications', 'messages', 'reviews',
 ];
 
 const cardClass = 'rounded-xl border border-[var(--hive-border)] bg-white p-5';
@@ -565,7 +568,15 @@ export default function ShopOwnerDashboardPage({ section = 'dashboard' }: { sect
             {currentSection === 'profile' && <ShopOwnerProfileSection key={selectedShop.id} shopId={selectedShop.id} />}
             {currentSection === 'visitors' && <VisitorsSection key={selectedShop.id} shopId={selectedShop.id} />}
             {currentSection === 'requests' && <ShopOwnerRequestsSection key={selectedShop.id} shopId={selectedShop.id} />}
-            {currentSection === 'listings' && <ShopManagementPage key={selectedShop.id} initialShopId={selectedShop.id} returnToDashboard />}
+            {currentSection === 'listings' && (
+              <ShopManagementPage
+                key={selectedShop.id}
+                initialShopId={selectedShop.id}
+                returnToDashboard
+                onManageGallery={() => navigate('/shop-owner/gallery')}
+              />
+            )}
+            {currentSection === 'gallery' && <ShopGalleryManagement key={selectedShop.id} shopId={selectedShop.id} shopName={selectedShop.name} />}
             {currentSection === 'transactions' && (user?.userId
               ? <TransactionsSection key={user.userId} userId={user.userId} />
               : <p role="alert" className={cardClass}>Your signed-in user ID is unavailable.</p>)}

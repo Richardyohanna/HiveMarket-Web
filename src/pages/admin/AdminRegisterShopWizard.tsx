@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   createShop,
   createUser,
+  getAdminUserDetail,
   getNigeriaLocations,
   searchUsers,
   type AdminUserSummary,
 } from '../../api/adminApi';
 import { ApiError } from '../../lib/apiClient';
 import { useRouter } from '../../lib/router';
+import { prepareShopImage } from '../../utils/shopImageUpload';
 import {
   ErrorBanner,
   FieldLabel,
@@ -75,7 +77,15 @@ export default function AdminRegisterShopWizard() {
   const [closingTime, setClosingTime] = useState('');
   const [shopImage, setShopImage] = useState<File | null>(null);
   const [shopBanner, setShopBanner] = useState<File | null>(null);
+  const [shopImagePreview, setShopImagePreview] = useState<string | null>(null);
+  const [shopBannerPreview, setShopBannerPreview] = useState<string | null>(null);
+  const [shopImageError, setShopImageError] = useState<string | null>(null);
+  const [shopBannerError, setShopBannerError] = useState<string | null>(null);
+  const [isPreparingImages, setIsPreparingImages] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const imagePreviewUrls = useRef<{ image: string | null; banner: string | null }>({ image: null, banner: null });
+  const imageSelectionGeneration = useRef({ image: 0, banner: 0 });
+  const pendingImagePreparations = useRef(0);
 
   const categories = useMemo(
     () => categoriesInput.split(',').map((category) => category.trim()).filter(Boolean),
@@ -98,6 +108,52 @@ export default function AdminRegisterShopWizard() {
       });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => () => {
+    if (imagePreviewUrls.current.image) URL.revokeObjectURL(imagePreviewUrls.current.image);
+    if (imagePreviewUrls.current.banner) URL.revokeObjectURL(imagePreviewUrls.current.banner);
+  }, []);
+
+  async function selectShopImage(kind: 'image' | 'banner', file: File | null) {
+    const generation = ++imageSelectionGeneration.current[kind];
+    const previousUrl = imagePreviewUrls.current[kind];
+    if (previousUrl) URL.revokeObjectURL(previousUrl);
+    imagePreviewUrls.current[kind] = null;
+    if (kind === 'image') {
+      setShopImage(null);
+      setShopImagePreview(null);
+      setShopImageError(null);
+    } else {
+      setShopBanner(null);
+      setShopBannerPreview(null);
+      setShopBannerError(null);
+    }
+    if (!file) return;
+
+    pendingImagePreparations.current += 1;
+    setIsPreparingImages(true);
+    try {
+      const prepared = await prepareShopImage(file);
+      if (generation !== imageSelectionGeneration.current[kind]) return;
+      const previewUrl = URL.createObjectURL(prepared);
+      imagePreviewUrls.current[kind] = previewUrl;
+      if (kind === 'image') {
+        setShopImage(prepared);
+        setShopImagePreview(previewUrl);
+      } else {
+        setShopBanner(prepared);
+        setShopBannerPreview(previewUrl);
+      }
+    } catch (imageError) {
+      if (generation !== imageSelectionGeneration.current[kind]) return;
+      const message = imageError instanceof Error ? imageError.message : 'Unable to prepare this image.';
+      if (kind === 'image') setShopImageError(message);
+      else setShopBannerError(message);
+    } finally {
+      pendingImagePreparations.current -= 1;
+      setIsPreparingImages(pendingImagePreparations.current > 0);
+    }
+  }
 
   function toAmPmTime(time: string): string | undefined {
     if (!time) return undefined;
@@ -138,6 +194,9 @@ export default function AdminRegisterShopWizard() {
     }
 
     if (current === 1) {
+      if (shopImageError || shopBannerError) {
+        return shopImageError || shopBannerError;
+      }
       if (!shopName.trim() || !shopPhone.trim() || !shopType.trim()) {
         return 'Please fill in shop name, phone, and shop type.';
       }
@@ -183,8 +242,8 @@ export default function AdminRegisterShopWizard() {
 
     setError(null);
     setIsSubmitting(true);
+    let userId = selectedExistingUser?.id || createdUserId;
     try {
-      let userId = selectedExistingUser?.id || createdUserId;
       if (!userId && ownerMode === 'new') {
         const user = await createUser({
           fullName: ownerFullName.trim(),
@@ -222,7 +281,19 @@ export default function AdminRegisterShopWizard() {
       });
       navigate(`/admin/shops/${encodeURIComponent(shop.id)}`, { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong while registering the shop.');
+      if (err instanceof ApiError && err.status === 409 && userId) {
+        try {
+          const owner = await getAdminUserDetail(userId);
+          if (owner.shopId) {
+            navigate(`/admin/shops/${encodeURIComponent(owner.shopId)}`, { replace: true });
+            return;
+          }
+        } catch (recoveryError) {
+          setError(`${err.message} Registration status could not be verified: ${recoveryError instanceof Error ? recoveryError.message : 'Please check the shop list before retrying.'}`);
+          return;
+        }
+      }
+      setError(err instanceof Error ? err.message : 'Something went wrong while registering the shop.');
     } finally {
       setIsSubmitting(false);
     }
@@ -444,8 +515,47 @@ export default function AdminRegisterShopWizard() {
               <div><FieldLabel>Closing time</FieldLabel><TextInput type="time" value={closingTime} onChange={(event) => setClosingTime(event.target.value)} /></div>
             </div>
           )}
-          <div><FieldLabel>Shop image (optional)</FieldLabel><input type="file" accept="image/*" onChange={(event) => setShopImage(event.target.files?.[0] || null)} /></div>
-          <div><FieldLabel>Shop banner (optional)</FieldLabel><input type="file" accept="image/*" onChange={(event) => setShopBanner(event.target.files?.[0] || null)} /></div>
+          <div className="space-y-2">
+            <FieldLabel>Shop image (optional)</FieldLabel>
+            <input
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp,.heic,.heif,image/jpeg,image/png,image/webp,image/heic,image/heif"
+              disabled={isSubmitting || isPreparingImages}
+              onChange={(event) => {
+                void selectShopImage('image', event.currentTarget.files?.[0] || null);
+                event.currentTarget.value = '';
+              }}
+            />
+            {shopImagePreview && <img src={shopImagePreview} alt="Selected shop image preview" className="h-36 w-36 rounded-xl border border-[var(--hive-border)] object-cover" />}
+            {shopImage && <p className="text-xs text-gray-500">Ready: {shopImage.name}</p>}
+            {shopImageError && <p role="alert" className="text-sm text-red-700">{shopImageError}</p>}
+            {(shopImage || shopImageError) && (
+              <button type="button" onClick={() => void selectShopImage('image', null)} className="text-sm font-semibold text-[#008100]">
+                Remove shop image
+              </button>
+            )}
+          </div>
+          <div className="space-y-2">
+            <FieldLabel>Shop banner (optional)</FieldLabel>
+            <input
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp,.heic,.heif,image/jpeg,image/png,image/webp,image/heic,image/heif"
+              disabled={isSubmitting || isPreparingImages}
+              onChange={(event) => {
+                void selectShopImage('banner', event.currentTarget.files?.[0] || null);
+                event.currentTarget.value = '';
+              }}
+            />
+            {shopBannerPreview && <img src={shopBannerPreview} alt="Selected shop banner preview" className="h-36 w-full max-w-md rounded-xl border border-[var(--hive-border)] object-cover" />}
+            {shopBanner && <p className="text-xs text-gray-500">Ready: {shopBanner.name}</p>}
+            {shopBannerError && <p role="alert" className="text-sm text-red-700">{shopBannerError}</p>}
+            {(shopBanner || shopBannerError) && (
+              <button type="button" onClick={() => void selectShopImage('banner', null)} className="text-sm font-semibold text-[#008100]">
+                Remove shop banner
+              </button>
+            )}
+            {isPreparingImages && <p role="status" className="text-sm text-gray-600">Preparing selected image…</p>}
+          </div>
         </div>
       )}
 
@@ -474,9 +584,9 @@ export default function AdminRegisterShopWizard() {
           </SecondaryButton>
         )}
         {step < STEPS.length - 1 ? (
-          <PrimaryButton type="button" onClick={goNext}>Continue</PrimaryButton>
+          <PrimaryButton type="button" onClick={goNext} disabled={isPreparingImages}>Continue</PrimaryButton>
         ) : (
-          <PrimaryButton type="button" onClick={() => void handleSubmit()} isLoading={isSubmitting}>
+          <PrimaryButton type="button" onClick={() => void handleSubmit()} isLoading={isSubmitting || isPreparingImages} disabled={isPreparingImages}>
             Register shop
           </PrimaryButton>
         )}

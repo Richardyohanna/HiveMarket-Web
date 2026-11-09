@@ -1,4 +1,5 @@
 import { apiFetch } from '../lib/apiClient';
+import { prepareShopImage } from '../utils/shopImageUpload';
 
 export type AdminLocation = {
   country?: string | null;
@@ -241,6 +242,7 @@ export type AdminShopProduct = {
   pQuantity: number;
   category: string;
   imageUrls?: string[];
+  status?: string;
 };
 
 export type AdminShopService = {
@@ -324,7 +326,11 @@ export type CreateShopPayload = {
   banner?: File | null;
 };
 
-export function createShop(payload: CreateShopPayload) {
+export async function createShop(payload: CreateShopPayload) {
+  const [image, banner] = await Promise.all([
+    payload.image ? prepareShopImage(payload.image) : null,
+    payload.banner ? prepareShopImage(payload.banner) : null,
+  ]);
   const form = new FormData();
   form.append('userId', payload.userId);
   form.append('name', payload.name);
@@ -346,8 +352,8 @@ export function createShop(payload: CreateShopPayload) {
   form.append('state', payload.state);
   form.append('lga', payload.lga);
   payload.categories.forEach((category) => form.append('categories', category));
-  if (payload.image) form.append('image', payload.image);
-  if (payload.banner) form.append('banner', payload.banner);
+  if (image) form.append('image', image, image.name);
+  if (banner) form.append('banner', banner, banner.name);
 
   return apiFetch<ShopResponse>('/api/admin/shops', { method: 'POST', body: form, isFormData: true });
 }

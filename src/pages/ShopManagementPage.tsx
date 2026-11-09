@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { ArrowLeft, Package, Store, Wrench } from 'lucide-react';
+import { ArrowLeft, Images, Package, Store, Wrench } from 'lucide-react';
 import {
   getMyShops,
   type OwnedShopSummary,
@@ -21,6 +21,7 @@ import {
 } from '../api/adminApi';
 import { ApiError } from '../lib/apiClient';
 import { useRouter } from '../lib/router';
+import ProductImagePicker from '../components/ProductImagePicker';
 import {
   ErrorBanner,
   FieldLabel,
@@ -31,7 +32,7 @@ import {
   TextInput,
 } from '../components/ui';
 
-type FormView = 'product' | 'service' | null;
+type FormView = 'choice' | 'product' | 'service' | null;
 type SelectableListing = AdminShopProduct | AdminShopService;
 
 const fieldClass = 'w-full rounded-lg border border-[var(--hive-border)] bg-white px-3.5 py-2.5 text-[15px] text-[#17191c]';
@@ -40,9 +41,11 @@ const cardClass = 'rounded-xl border border-[var(--hive-border)] bg-white p-5';
 export default function ShopManagementPage({
   initialShopId,
   returnToDashboard = false,
+  onManageGallery,
 }: {
   initialShopId?: string;
   returnToDashboard?: boolean;
+  onManageGallery?: () => void;
 }) {
   const { navigate } = useRouter();
   const [shops, setShops] = useState<OwnedShopSummary[]>([]);
@@ -58,6 +61,7 @@ export default function ShopManagementPage({
   const [formView, setFormView] = useState<FormView>(null);
   const [editingProduct, setEditingProduct] = useState<AdminShopProduct | null>(null);
   const [editingService, setEditingService] = useState<AdminShopService | null>(null);
+  const [productImageFiles, setProductImageFiles] = useState<File[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -118,7 +122,8 @@ export default function ShopManagementPage({
     setNotice(null);
     setEditingProduct(product);
     setEditingService(null);
-    setFormView('product');
+    setProductImageFiles([]);
+    setFormView(product ? 'product' : 'choice');
   }
 
   function startServiceForm(service: AdminShopService | null = null) {
@@ -126,6 +131,7 @@ export default function ShopManagementPage({
     setNotice(null);
     setEditingService(service);
     setEditingProduct(null);
+    setProductImageFiles([]);
     setFormView('service');
   }
 
@@ -133,7 +139,14 @@ export default function ShopManagementPage({
     setFormView(null);
     setEditingProduct(null);
     setEditingService(null);
+    setProductImageFiles([]);
     setError(null);
+  }
+
+  function openGalleryUpload() {
+    closeForm();
+    if (onManageGallery) onManageGallery();
+    else navigate('/shop-owner/gallery');
   }
 
   function refreshListings() {
@@ -162,9 +175,6 @@ export default function ShopManagementPage({
       category: String(form.get('category') || '').trim(),
       shopId,
     };
-    const imageInput = formElement.elements.namedItem('images') as HTMLInputElement | null;
-    const imageFiles = Array.from(imageInput?.files ?? []).filter((image) => image.size > 0);
-
     if (!payload.pName || !payload.pDetail || !payload.category) {
       setError('Product name, description, and category are required.');
       return;
@@ -183,9 +193,9 @@ export default function ShopManagementPage({
       const saved = editingProduct
         ? await updateAdminShopProduct(editingProduct.id, payload)
         : await createProduct(payload);
-      if (imageFiles.length) {
+      if (productImageFiles.length) {
         try {
-          await uploadProductImages(saved.id, imageFiles);
+          await uploadProductImages(saved.id, productImageFiles);
         } catch (imageError) {
           setNotice(`Product saved, but its images could not be uploaded: ${imageError instanceof Error ? imageError.message : 'Upload failed.'}`);
           closeForm();
@@ -194,6 +204,7 @@ export default function ShopManagementPage({
         }
       }
       setNotice(editingProduct ? 'Product updated.' : 'Product added to your shop.');
+      setProductImageFiles([]);
       closeForm();
       refreshListings();
     } catch (saveError) {
@@ -312,6 +323,38 @@ export default function ShopManagementPage({
               )}
             </section>
 
+            {formView === 'choice' && (
+              <section className={`${cardClass} mb-5 max-w-2xl`}>
+                <h2 className="text-lg font-bold text-[#17191c]">Choose how to upload</h2>
+                <p className="mt-1 text-sm text-gray-600">Product listings and Gallery photos are managed separately.</p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormView('product')}
+                    className="flex items-start gap-3 rounded-xl border border-[var(--hive-border)] bg-white p-4 text-left hover:border-[#008100]"
+                  >
+                    <Package className="mt-0.5 shrink-0 text-[#008100]" size={21} />
+                    <span>
+                      <span className="block font-semibold text-[#17191c]">Upload product with details</span>
+                      <span className="mt-1 block text-sm text-gray-600">Create a product listing with name, price, details, and inventory.</span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openGalleryUpload}
+                    className="flex items-start gap-3 rounded-xl border border-[var(--hive-border)] bg-white p-4 text-left hover:border-[#008100]"
+                  >
+                    <Images className="mt-0.5 shrink-0 text-[#008100]" size={21} />
+                    <span>
+                      <span className="block font-semibold text-[#17191c]">Upload pictures only</span>
+                      <span className="mt-1 block text-sm text-gray-600">Share photos in your shop Gallery without creating a product.</span>
+                    </span>
+                  </button>
+                </div>
+                <SecondaryButton type="button" className="mt-4 w-auto" onClick={closeForm}>Cancel</SecondaryButton>
+              </section>
+            )}
+
             {formView === 'product' && (
               <section className={`${cardClass} mb-5 max-w-2xl`}>
                 <h2 className="mb-5 text-lg font-bold">{editingProduct ? 'Edit product' : 'Add product'}</h2>
@@ -332,7 +375,11 @@ export default function ShopManagementPage({
                   <div><FieldLabel>Category</FieldLabel><TextInput name="category" required defaultValue={editingProduct?.category} /></div>
                   <div>
                     <FieldLabel>{editingProduct ? 'Add product images' : 'Product images (optional)'}</FieldLabel>
-                    <input name="images" type="file" accept="image/*" multiple />
+                    <ProductImagePicker
+                      existingImages={editingProduct?.imageUrls}
+                      images={productImageFiles}
+                      onChange={setProductImageFiles}
+                    />
                   </div>
                   <div className="flex gap-3">
                     <PrimaryButton type="submit" isLoading={isSaving}>{editingProduct ? 'Save product' : 'Add product'}</PrimaryButton>
@@ -375,9 +422,16 @@ export default function ShopManagementPage({
                   <div className="divide-y divide-[var(--hive-border)]">
                     {products.map((product) => (
                       <div key={product.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
-                        <div>
-                          <p className="font-semibold">{product.pName}</p>
-                          <p className="text-sm text-gray-600">{product.category} · ₦{Number(product.pAmount).toLocaleString()} · Qty {product.pQuantity}</p>
+                        <div className="flex min-w-0 items-center gap-3">
+                          {product.imageUrls?.[0]
+                            ? <img src={product.imageUrls[0]} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover" />
+                            : <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-green-50 text-[#008100]"><Package size={22} /></div>}
+                          <div className="min-w-0">
+                            <p className="font-semibold">{product.pName}</p>
+                            <p className="text-sm text-gray-600">{product.category} · ₦{Number(product.pAmount).toLocaleString()} · Qty {product.pQuantity}</p>
+                            <p className="line-clamp-2 text-sm text-gray-500">{product.pDetail}</p>
+                            {product.status && <p className="mt-1 text-xs font-medium text-gray-500">Status: {product.status}</p>}
+                          </div>
                         </div>
                         <div className="flex gap-2">
                           <SecondaryButton type="button" className="w-auto px-3" disabled={isSaving} onClick={() => startProductForm(product)}>Edit</SecondaryButton>
