@@ -164,6 +164,83 @@ export type AdminFeedback = {
   createdAt: string;
 };
 
+export type ShopOutreachStatus = 'REGISTERED' | 'REJECTED' | 'POTENTIAL';
+
+export type ShopOutreachRecord = {
+  id: string;
+  shopName: string;
+  location: string;
+  category: string;
+  visitedAt: string;
+  status: ShopOutreachStatus;
+  ownerName?: string | null;
+  phoneNumber?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  rejectionReason?: string | null;
+  followUpDate?: string | null;
+  linkedShopId?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type ShopOutreachSummary = {
+  totalApproached: number;
+  registeredThroughOutreach: number;
+  rejectedShops: number;
+  potentialShops: number;
+  overallRegistrationConversionRate: number;
+  followUpsDue: number;
+  totalPlatformShops: number;
+};
+
+export type ShopOutreachCreatePayload = {
+  shopName: string;
+  location: string;
+  category: string;
+  visitedAt: string;
+  status: ShopOutreachStatus;
+  ownerName?: string | null;
+  phoneNumber?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  rejectionReason?: string | null;
+  followUpDate?: string | null;
+  linkedShopId?: string | null;
+};
+
+export function getAdminOutreachSummary() {
+  return apiFetch<ShopOutreachSummary>('/api/admin/outreach/summary');
+}
+
+export function getAdminOutreachRecords(params: {
+  query?: string;
+  status?: string;
+  location?: string;
+  category?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  size?: number;
+}) {
+  return apiFetch<{ content: ShopOutreachRecord[]; page: number; size: number; totalElements: number; totalPages: number }>(`/api/admin/outreach/records?${consoleQuery(params)}`);
+}
+
+export function createAdminOutreachRecord(payload: ShopOutreachCreatePayload) {
+  return apiFetch<ShopOutreachRecord>('/api/admin/outreach/records', { method: 'POST', body: payload });
+}
+
+export function updateAdminOutreachRecord(id: string, payload: Partial<ShopOutreachCreatePayload>) {
+  return apiFetch<ShopOutreachRecord>(`/api/admin/outreach/records/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: payload,
+  });
+}
+
+export function deleteAdminOutreachRecord(id: string) {
+  return apiFetch<void>(`/api/admin/outreach/records/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 export type AdminAuditEntry = {
   id: string;
   adminUserId: string;

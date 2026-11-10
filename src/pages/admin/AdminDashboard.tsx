@@ -27,12 +27,13 @@ import {
   type AdminUserDetail,
   type AdminUserSummary,
 } from '../../api/adminApi';
+import ShopOutreachSection from './ShopOutreachSection';
 import { ApiError } from '../../lib/apiClient';
 import { useAuth } from '../../lib/AuthContext';
 import { useRouter } from '../../lib/router';
 import { ErrorBanner, SecondaryButton, SuccessBanner, TextInput } from '../../components/ui';
 
-type AdminTab = 'overview' | 'users' | 'shops' | 'reports' | 'requests' | 'support' | 'feedback' | 'audit';
+type AdminTab = 'overview' | 'users' | 'shops' | 'reports' | 'requests' | 'support' | 'feedback' | 'audit' | 'outreach';
 type PageData<T> = AdminPage<T>;
 
 const tabs: { id: AdminTab; label: string }[] = [
@@ -43,6 +44,7 @@ const tabs: { id: AdminTab; label: string }[] = [
   { id: 'requests', label: 'Requests' },
   { id: 'support', label: 'Support' },
   { id: 'feedback', label: 'Feedback' },
+  { id: 'outreach', label: 'Shop Outreach' },
   { id: 'audit', label: 'Audit history' },
 ];
 
@@ -130,11 +132,14 @@ export default function AdminDashboard({ initialSection = 'overview' }: { initia
       setIsLoading(true);
       setError(null);
       try {
-        if (tab === 'overview') {
-          const [dashboard, points] = await Promise.all([getAdminDashboard(), getAdminAnalytics()]);
+        if (tab === 'overview' || tab === 'outreach') {
+          const dashboard = await getAdminDashboard();
           if (!cancelled) {
             setMetrics(dashboard);
-            setAnalytics(points);
+          }
+          if (tab === 'overview') {
+            const points = await getAdminAnalytics();
+            if (!cancelled) setAnalytics(points);
           }
         } else if (tab === 'users') {
           const data = await getAdminUsers({ query: appliedQuery, page, size: 20 });
@@ -408,6 +413,10 @@ export default function AdminDashboard({ initialSection = 'overview' }: { initia
               <div className={cardClass}><p className="text-sm text-gray-500">Shops registered this month</p><p className="mt-2 text-2xl font-bold">{metrics?.shopsThisMonth ?? '—'}</p></div>
             </div>
           </>
+        )}
+
+        {tab === 'outreach' && (
+          <ShopOutreachSection totalPlatformShops={metrics?.totalShops ?? 0} />
         )}
 
         {tab === 'users' && (
